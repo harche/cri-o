@@ -365,6 +365,9 @@ func (svc *imageService) PullImage(systemContext *types.SystemContext, imageName
 	if err != nil {
 		return nil, err
 	}
+
+	// ImageDecryptSecret has made it till here. From here the control goes to containers/image
+
 	_, err = copy.Image(svc.ctx, policyContext, destRef, srcRef, &options)
 	if err != nil {
 		return nil, err

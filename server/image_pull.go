@@ -47,6 +47,11 @@ func (s *Server) PullImage(ctx context.Context, req *pb.PullImageRequest) (resp 
 				Password: password,
 			}
 		}
+
+	}
+
+	if len(req.GetDcparams().GetPrivateKeyPasswds()) > 0 {
+		sourceCtx.DecryptParams = req.GetDcparams().GetPrivateKeyPasswds()
 	}
 
 	var (
