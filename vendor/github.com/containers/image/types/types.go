@@ -398,6 +398,7 @@ type ImageInspectInfo struct {
 	Architecture  string
 	Os            string
 	Layers        []string
+	Env           []string
 }
 
 // DockerAuthConfig contains authorization information for connecting to a registry.
@@ -488,7 +489,7 @@ type SystemContext struct {
 	DockerInsecureSkipTLSVerify OptionalBool
 	// if nil, the library tries to parse ~/.docker/config.json to retrieve credentials
 	DockerAuthConfig *DockerAuthConfig
-
+	// if not nil, decryption keys will be used to decrypt container image
 	DecryptParams []string
 	// if not "", an User-Agent header is added to each request when contacting a registry.
 	DockerRegistryUserAgent string
