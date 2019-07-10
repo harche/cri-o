@@ -25,6 +25,7 @@ require (
 	github.com/docker/go-units v0.4.0
 	github.com/elazarl/goproxy/ext v0.0.0-20190703090003-6125c262ffb0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
+	github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa // indirect
 	github.com/go-zoo/bone v1.3.0
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f
 	github.com/gogo/protobuf v1.2.1
@@ -33,6 +34,8 @@ require (
 	github.com/google/renameio v0.1.0
 	github.com/hpcloud/tail v1.0.0
 	github.com/kr/pty v1.1.5
+	github.com/miscreant/miscreant-go v0.0.0-20190615163012-4f5dc8c406f6 // indirect
+	github.com/miscreant/miscreant.go v0.0.0-20190615163012-4f5dc8c406f6 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/opencontainers/go-digest v1.0.0-rc1
@@ -49,20 +52,22 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	github.com/urfave/cli v1.20.0
 	github.com/vbatts/git-validation v1.0.0
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0
-	google.golang.org/grpc v1.21.1
+	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
+	google.golang.org/grpc v1.22.0
+	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v0.0.0
 	k8s.io/cri-api v0.0.0
 	k8s.io/kubernetes v0.0.0
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a
+
 )
 
 replace (
-	github.com/containers/image => github.com/lumjjb/image v1.5.2-0.20190705075516-23c87230687d
+	github.com/containers/image => github.com/harche/image v1.5.2-0.20190724094431-4d274a73d1e3
 	github.com/opencontainers/runtime-spec => github.com/opencontainers/runtime-spec v0.1.2-0.20190408193819-a1b50f621a48
 	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20190615005809-e8462b5b5dc2
 	k8s.io/apiextensions-apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20190615005809-e8462b5b5dc2

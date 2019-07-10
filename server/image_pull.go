@@ -81,6 +81,15 @@ func (s *Server) PullImage(ctx context.Context, req *pb.PullImageRequest) (resp 
 				logrus.Debugf("image config digest is empty, re-pulling image")
 			} else if tmpImgConfigDigest.String() == storedImage.ConfigDigest.String() {
 				logrus.Debugf("image %s already in store, skipping pull", img)
+				// In case the layers of this image are encrypted we need to verify
+				// the authorization before using the image
+				_, err = s.StorageImageServer().CanDecrypt(s.systemContext, img, &copy.Options{
+					SourceCtx:      &sourceCtx,
+					DestinationCtx: s.systemContext,
+				})
+				if err != nil {
+					return nil, err
+				}
 				pulled = img
 				break
 			}

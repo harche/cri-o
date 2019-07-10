@@ -14,9 +14,14 @@ import (
 	"time"
 
 	"github.com/containers/image/docker/reference"
+	"github.com/containers/image/encryption/enclib"
+	"github.com/containers/image/encryption/enclib/config"
+	"github.com/containers/image/encryption/enclib/utils"
 	"github.com/containers/image/image"
 	"github.com/containers/image/manifest"
 	"github.com/containers/image/pkg/blobinfocache"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
 	"github.com/containers/image/pkg/compression"
 	"github.com/containers/image/signature"
 	"github.com/containers/image/transports"
@@ -37,6 +42,7 @@ type digestingReader struct {
 	expectedDigest      digest.Digest
 	validationFailed    bool
 	validationSucceeded bool
+	skipValidation      bool
 }
 
 // maxParallelDownloads is used to limit the maxmimum number of parallel
@@ -46,33 +52,40 @@ var maxParallelDownloads = 6
 // newDigestingReader returns an io.Reader implementation with contents of source, which will eventually return a non-EOF error
 // or set validationSucceeded/validationFailed to true if the source stream does/does not match expectedDigest.
 // (neither is set if EOF is never reached).
-func newDigestingReader(source io.Reader, expectedDigest digest.Digest) (*digestingReader, error) {
-	if err := expectedDigest.Validate(); err != nil {
-		return nil, errors.Errorf("Invalid digest specification %s", expectedDigest)
-	}
-	digestAlgorithm := expectedDigest.Algorithm()
-	if !digestAlgorithm.Available() {
-		return nil, errors.Errorf("Invalid digest specification %s: unsupported digest algorithm %s", expectedDigest, digestAlgorithm)
+func newDigestingReader(source io.Reader, expectedDigest digest.Digest, skipValidation bool) (*digestingReader, error) {
+	var digester digest.Digester
+	if !skipValidation {
+		if err := expectedDigest.Validate(); err != nil {
+			return nil, errors.Errorf("Invalid digest specification %s", expectedDigest)
+		}
+		digestAlgorithm := expectedDigest.Algorithm()
+		if !digestAlgorithm.Available() {
+			return nil, errors.Errorf("Invalid digest specification %s: unsupported digest algorithm %s", expectedDigest, digestAlgorithm)
+		}
+		digester = digestAlgorithm.Digester()
 	}
 	return &digestingReader{
 		source:           source,
-		digester:         digestAlgorithm.Digester(),
+		digester:         digester,
 		expectedDigest:   expectedDigest,
 		validationFailed: false,
+		skipValidation:   skipValidation,
 	}, nil
 }
 
 func (d *digestingReader) Read(p []byte) (int, error) {
 	n, err := d.source.Read(p)
-	if n > 0 {
-		if n2, err := d.digester.Hash().Write(p[:n]); n2 != n || err != nil {
-			// Coverage: This should not happen, the hash.Hash interface requires
-			// d.digest.Write to never return an error, and the io.Writer interface
-			// requires n2 == len(input) if no error is returned.
-			return 0, errors.Wrapf(err, "Error updating digest during verification: %d vs. %d", n2, n)
+	if !d.skipValidation {
+		if n > 0 {
+			if n2, err := d.digester.Hash().Write(p[:n]); n2 != n || err != nil {
+				// Coverage: This should not happen, the hash.Hash interface requires
+				// d.digest.Write to never return an error, and the io.Writer interface
+				// requires n2 == len(input) if no error is returned.
+				return 0, errors.Wrapf(err, "Error updating digest during verification: %d vs. %d", n2, n)
+			}
 		}
 	}
-	if err == io.EOF {
+	if err == io.EOF && !d.skipValidation {
 		actualDigest := d.digester.Digest()
 		if actualDigest != d.expectedDigest {
 			d.validationFailed = true
@@ -94,6 +107,7 @@ type copier struct {
 	progress         chan types.ProgressProperties
 	blobInfoCache    types.BlobInfoCache
 	copyInParallel   bool
+	dcparameters     []string
 }
 
 // imageCopier tracks state specific to a single image (possibly an item of a manifest list)
@@ -104,6 +118,8 @@ type imageCopier struct {
 	diffIDsAreNeeded   bool
 	canModifyManifest  bool
 	canSubstituteBlobs bool
+	dcparameters       []string
+	isCachedImage      bool
 }
 
 // Options allows supplying non-default configuration modifying the behavior of CopyImage.
@@ -117,6 +133,7 @@ type Options struct {
 	Progress         chan types.ProgressProperties // Reported to when ProgressInterval has arrived for a single artifact+offset.
 	// manifest MIME type of image set by user. "" is default and means use the autodetection to the the manifest MIME type
 	ForceManifestMIMEType string
+	UnwrapOnly            bool
 }
 
 // Image copies image from srcRef to destRef, using policyContext to validate
@@ -286,6 +303,8 @@ func (c *copier) copyOneImage(ctx context.Context, policyContext *signature.Poli
 		src:             src,
 		// diffIDsAreNeeded is computed later
 		canModifyManifest: len(sigs) == 0 && !destIsDigestedReference,
+		dcparameters:      options.SourceCtx.DecryptParams,
+		isCachedImage:     options.UnwrapOnly,
 	}
 	// Ensure _this_ copy sees exactly the intended data when either processing a signed image or signing it.
 	// This may be too conservative, but for now, better safe than sorry, _especially_ on the SignBy path:
@@ -652,6 +671,34 @@ type diffIDResult struct {
 // copyLayer copies a layer with srcInfo (with known Digest and possibly known Size) in src to dest, perhaps compressing it if canCompress,
 // and returns a complete blobInfo of the copied layer, and a value for LayerDiffIDs if diffIDIsNeeded
 func (ic *imageCopier) copyLayer(ctx context.Context, srcInfo types.BlobInfo, pool *mpb.Progress) (types.BlobInfo, digest.Digest, error) {
+	// This is used to authenticate the encrypted images that are already
+	// present in the image cached. For every layer we will try to unwrap
+	// the symmetric key with the provided private keys. If we fail, we will
+	// not allow the image to be provisioned.
+	if ic.isCachedImage {
+		if srcInfo.MediaType == manifest.DockerV2Schema2LayerGzipEncMediaType ||
+			srcInfo.MediaType == manifest.DockerV2Schema2LayerEncMediaType {
+
+			dcparams, err := utils.SortDecryptionKeys(strings.Join(ic.dcparameters, ","))
+			if err != nil {
+				return types.BlobInfo{}, "", errors.Wrapf(err, "Unable to process given private keys for the digest %+v", srcInfo.Digest)
+			}
+
+			dc := &config.DecryptConfig{
+				Parameters: dcparams,
+			}
+
+			newDesc := ocispec.Descriptor{
+				Annotations: srcInfo.Annotations,
+			}
+
+			_, err = enclib.DecryptLayer(dc, nil, newDesc, true)
+			if err != nil {
+				return types.BlobInfo{}, "", errors.Wrapf(err, "Image authentication failed for the digest %+v", srcInfo.Digest)
+			}
+		}
+	}
+
 	cachedDiffID := ic.c.blobInfoCache.UncompressedDigest(srcInfo.Digest) // May be ""
 	diffIDIsNeeded := ic.diffIDsAreNeeded && cachedDiffID == ""
 
@@ -678,7 +725,7 @@ func (ic *imageCopier) copyLayer(ctx context.Context, srcInfo types.BlobInfo, po
 
 	bar := ic.c.createProgressBar(pool, srcInfo, "blob", "done")
 
-	blobInfo, diffIDChan, err := ic.copyLayerFromStream(ctx, srcStream, types.BlobInfo{Digest: srcInfo.Digest, Size: srcBlobSize}, diffIDIsNeeded, bar)
+	blobInfo, diffIDChan, err := ic.copyLayerFromStream(ctx, srcStream, types.BlobInfo{Digest: srcInfo.Digest, Size: srcBlobSize, MediaType: srcInfo.MediaType, Annotations: srcInfo.Annotations}, diffIDIsNeeded, bar)
 	if err != nil {
 		return types.BlobInfo{}, "", err
 	}
@@ -733,6 +780,7 @@ func (ic *imageCopier) copyLayerFromStream(ctx context.Context, srcStream io.Rea
 			return pipeWriter
 		}
 	}
+	ic.c.dcparameters = ic.dcparameters
 	blobInfo, err := ic.c.copyBlobFromStream(ctx, srcStream, srcInfo, getDiffIDRecorder, ic.canModifyManifest, false, bar) // Sets err to nil on success
 	return blobInfo, diffIDChan, err
 	// We need the defer … pipeWriter.CloseWithError() to happen HERE so that the caller can block on reading from diffIDChan
@@ -780,7 +828,36 @@ func (c *copier) copyBlobFromStream(ctx context.Context, srcStream io.Reader, sr
 	// Note that for this check we don't use the stronger "validationSucceeded" indicator, because
 	// dest.PutBlob may detect that the layer already exists, in which case we don't
 	// read stream to the end, and validation does not happen.
-	digestingReader, err := newDigestingReader(srcStream, srcInfo.Digest)
+
+	var err error
+	if srcInfo.MediaType == manifest.DockerV2Schema2LayerGzipEncMediaType ||
+		srcInfo.MediaType == manifest.DockerV2Schema2LayerEncMediaType {
+
+		dcparams, err := utils.SortDecryptionKeys(strings.Join(c.dcparameters, ","))
+		if err != nil {
+			return types.BlobInfo{}, errors.Wrapf(err, "Error generating dcparameters for the layer %s", srcInfo.Digest)
+		}
+
+		dc := &config.DecryptConfig{
+			Parameters: dcparams,
+		}
+
+		newDesc := ocispec.Descriptor{
+			Annotations: srcInfo.Annotations,
+		}
+
+		srcStream, err = enclib.DecryptLayer(dc, srcStream, newDesc, false)
+		if err != nil {
+			return types.BlobInfo{}, errors.Wrapf(err, "Error decrypting layer %s", srcInfo.Digest)
+		}
+
+		srcInfo.Digest = ""
+		srcInfo.Size = -1
+	}
+
+	skipDigestValidation := srcInfo.Digest == ""
+
+	digestingReader, err := newDigestingReader(srcStream, srcInfo.Digest, skipDigestValidation)
 	if err != nil {
 		return types.BlobInfo{}, errors.Wrapf(err, "Error preparing to verify blob %s", srcInfo.Digest)
 	}
