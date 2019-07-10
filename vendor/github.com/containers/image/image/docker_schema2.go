@@ -349,3 +349,8 @@ func v1ConfigFromConfigJSON(configJSON []byte, v1ID, parentV1ID string, throwawa
 	}
 	return json.Marshal(rawContents)
 }
+
+// SupportsEncryption returns an error if encryption is not supported for the manifest type
+func (m *manifestSchema2) SupportsEncryption(context.Context) error {
+	return errors.New("Docker Schema v2 does not support encryption")
+}

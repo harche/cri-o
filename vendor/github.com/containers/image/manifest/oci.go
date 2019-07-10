@@ -73,7 +73,7 @@ func (m *OCI1) LayerInfos() []LayerInfo {
 	return blobs
 }
 
-// UpdateLayerInfos replaces the original layers with the specified BlobInfos (size+digest+urls), in order (the root layer first, and then successive layered layers)
+// UpdateLayerInfos replaces the original layers with the specified BlobInfos (size+digest+urls+mediatype), in order (the root layer first, and then successive layered layers)
 func (m *OCI1) UpdateLayerInfos(layerInfos []types.BlobInfo) error {
 	if len(m.Layers) != len(layerInfos) {
 		return errors.Errorf("Error preparing updated manifest: layer count changed from %d to %d", len(m.Layers), len(layerInfos))
@@ -81,7 +81,12 @@ func (m *OCI1) UpdateLayerInfos(layerInfos []types.BlobInfo) error {
 	original := m.Layers
 	m.Layers = make([]imgspecv1.Descriptor, len(layerInfos))
 	for i, info := range layerInfos {
-		m.Layers[i].MediaType = original[i].MediaType
+		if info.MediaType != "" {
+			m.Layers[i].MediaType = info.MediaType
+		} else {
+			m.Layers[i].MediaType = original[i].MediaType
+
+		}
 		m.Layers[i].Digest = info.Digest
 		m.Layers[i].Size = info.Size
 		m.Layers[i].Annotations = info.Annotations

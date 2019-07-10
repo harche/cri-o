@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	dcconfig "github.com/containers/image/encryption/enclib/config"
 	"github.com/cri-o/cri-o/lib/config"
 	"github.com/cri-o/cri-o/lib/sandbox"
 	"github.com/cri-o/cri-o/pkg/storage"
@@ -571,7 +572,13 @@ func (s *Server) CreateContainer(ctx context.Context, req *pb.CreateContainerReq
 		}
 	}()
 
-	container, err := s.createSandboxContainer(ctx, containerID, containerName, sb, req.GetSandboxConfig(), containerConfig)
+	cc, err := dcconfig.DecryptWithBase64Keys(req.GetDcparams().GetPrivateKeyPasswds())
+	if err != nil {
+		return nil, err
+	}
+	s.systemContext.CryptoConfig = &cc
+
+	container, err := s.createSandboxContainer(ctx, containerID, containerName, sb, req.GetSandboxConfig(), containerConfig, cc)
 	if err != nil {
 		return nil, err
 	}

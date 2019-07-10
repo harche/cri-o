@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/containers/image/copy"
+	"github.com/containers/image/encryption/enclib/config"
 	"github.com/containers/image/types"
 	"github.com/cri-o/cri-o/pkg/storage"
 	"github.com/sirupsen/logrus"
@@ -51,7 +52,11 @@ func (s *Server) PullImage(ctx context.Context, req *pb.PullImageRequest) (resp 
 	}
 
 	if len(req.GetDcparams().GetPrivateKeyPasswds()) > 0 {
-		sourceCtx.DecryptParams = req.GetDcparams().GetPrivateKeyPasswds()
+		cc, err := config.DecryptWithBase64Keys(req.GetDcparams().GetPrivateKeyPasswds())
+		if err != nil {
+			return nil, err
+		}
+		sourceCtx.CryptoConfig = &cc
 	}
 
 	var (

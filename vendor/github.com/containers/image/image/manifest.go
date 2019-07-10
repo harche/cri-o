@@ -44,6 +44,8 @@ type genericManifest interface {
 	// UpdatedImage returns a types.Image modified according to options.
 	// This does not change the state of the original Image object.
 	UpdatedImage(ctx context.Context, options types.ManifestUpdateOptions) (types.Image, error)
+	// SupportsEncryption returns an error if encryption is not supported for the manifest type
+	SupportsEncryption(ctx context.Context) error
 }
 
 // manifestInstanceFromBlob returns a genericManifest implementation for (manblob, mt) in src.

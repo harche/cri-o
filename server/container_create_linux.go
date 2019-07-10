@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/containers/buildah/pkg/secrets"
+	"github.com/containers/image/encryption/enclib/config"
 	"github.com/containers/libpod/pkg/apparmor"
 	"github.com/containers/libpod/pkg/rootless"
 	createconfig "github.com/containers/libpod/pkg/spec"
@@ -207,7 +208,7 @@ func makeAccessible(path string, uid, gid int) error {
 	return nil
 }
 
-func (s *Server) createSandboxContainer(ctx context.Context, containerID, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig) (*oci.Container, error) {
+func (s *Server) createSandboxContainer(ctx context.Context, containerID, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig, cryptoConfig config.CryptoConfig) (*oci.Container, error) {
 	if sb == nil {
 		return nil, errors.New("createSandboxContainer needs a sandbox")
 	}
@@ -342,6 +343,7 @@ func (s *Server) createSandboxContainer(ctx context.Context, containerID, contai
 
 	containerIDMappings := s.defaultIDMappings
 	metadata := containerConfig.GetMetadata()
+	s.systemContext.CryptoConfig = &cryptoConfig
 
 	containerInfo, err := s.StorageRuntimeServer().CreateContainer(s.systemContext,
 		sb.Name(), sb.ID(),

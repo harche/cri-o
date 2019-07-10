@@ -180,6 +180,28 @@ func (r *runtimeService) createContainerOrPodSandbox(systemContext *types.System
 		}
 	}
 	img, err := istorage.Transport.GetStoreImage(r.storageImageServer.GetStore(), ref)
+
+	if img != nil {
+		// Check for image authentication.
+		// TODO - To improve the performance, introduce a global configuration flag
+		// to check if the image authentication should be performed or not. This is
+		// to avoid executing image authentication code where encrypted images are
+		// not at all used.
+
+		sourceCtx := types.SystemContext{}
+		if systemContext != nil {
+			sourceCtx = *systemContext // A shallow copy
+		}
+		_, err = r.storageImageServer.CanDecrypt(systemContext, img.Names[0], &copy.Options{
+			SourceCtx:      &sourceCtx,
+			DestinationCtx: systemContext,
+		})
+		if err != nil {
+			return ContainerInfo{}, err
+		}
+
+	}
+
 	if img == nil && errors.Cause(err) == storage.ErrImageUnknown && isPauseImage {
 		image := imageID
 		if imageName != "" {

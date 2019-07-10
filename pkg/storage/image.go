@@ -83,6 +83,8 @@ type ImageServer interface {
 	// PrepareImage returns an Image where the config digest can be grabbed
 	// for further analysis. Call Close() on the resulting image.
 	PrepareImage(systemContext *types.SystemContext, imageName string) (types.ImageCloser, error)
+	// CanDecrypt ddd
+	CanDecrypt(systemContext *types.SystemContext, imageName string, options *copy.Options) (bool, error)
 	// PullImage imports an image from the specified location.
 	PullImage(systemContext *types.SystemContext, imageName string, options *copy.Options) (types.ImageReference, error)
 	// UntagImage removes a name from the specified image, and if it was
@@ -340,6 +342,25 @@ func (svc *imageService) PrepareImage(inputSystemContext *types.SystemContext, i
 	return srcRef.NewImage(svc.ctx, systemContext)
 }
 
+func (svc *imageService) CanDecrypt(systemContext *types.SystemContext, imageName string, inputOptions *copy.Options) (bool, error) {
+	canDecrypt := false
+	inputOptions.CheckAuthorization = true
+
+	// Since the images is cached, in case if the layers of this image are
+	// encrypted we need to check if the provided private keys can be
+	// used to unwrap the symmetric key needed to decrypt the respective layer.
+	// This procedure ensures that CRIO does not serve encrypted images
+	// from it's cache without having valid keys.
+	// We are re-using PullImage call here because it already has the logic
+	// to reach to the correct descriptor belonging to the every layer of the image
+	_, err := svc.PullImage(systemContext, imageName, inputOptions)
+	if err == nil {
+		canDecrypt = true
+	}
+
+	return canDecrypt, err
+}
+
 func (svc *imageService) PullImage(systemContext *types.SystemContext, imageName string, inputOptions *copy.Options) (types.ImageReference, error) {
 	policy, err := signature.DefaultPolicy(systemContext)
 	if err != nil {
@@ -365,8 +386,6 @@ func (svc *imageService) PullImage(systemContext *types.SystemContext, imageName
 	if err != nil {
 		return nil, err
 	}
-
-	// ImageDecryptSecret has made it till here. From here the control goes to containers/image
 
 	_, err = copy.Image(svc.ctx, policyContext, destRef, srcRef, &options)
 	if err != nil {
