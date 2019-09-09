@@ -15,8 +15,9 @@ require (
 	github.com/containernetworking/plugins v0.8.3
 	github.com/containers/buildah v1.11.5-0.20191031204705-20e92ffe0982
 	github.com/containers/conmon v2.0.3+incompatible
-	github.com/containers/image/v5 v5.0.0
+	github.com/containers/image/v5 v5.0.1-0.20191126085826-502848a1358b
 	github.com/containers/libpod v1.6.3-0.20191101152258-04e8bf3dba50
+	github.com/containers/ocicrypt v0.0.0-20190930154801-b87a4a69c741
 	github.com/containers/storage v1.15.2
 	github.com/coreos/go-systemd/v22 v22.0.0
 	github.com/cpuguy83/go-md2man v1.0.10
