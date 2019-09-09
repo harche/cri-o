@@ -119,6 +119,12 @@ func mergeConfig(config *libconfig.Config, ctx *cli.Context) (string, error) {
 	if ctx.GlobalIsSet("default-runtime") {
 		config.DefaultRuntime = ctx.GlobalString("default-runtime")
 	}
+	if ctx.GlobalIsSet("enable-image-auth") {
+		config.EnableImageAuthorization = true
+	}
+	if ctx.GlobalIsSet("decryption-keys-path") {
+		config.DecryptionKeysPath = ctx.GlobalString("decryption-keys-path")
+	}
 	if ctx.GlobalIsSet("runtimes") {
 		runtimes := ctx.GlobalStringSlice("runtimes")
 		for _, r := range runtimes {
@@ -436,6 +442,14 @@ func main() {
 			Name:   "default-transport",
 			Usage:  fmt.Sprintf("default transport (default: %q)", defConf.DefaultTransport),
 			EnvVar: "CONTAINER_DEFAULT_TRANSPORT",
+		},
+		cli.BoolFlag{
+			Name:  "enable-image-auth",
+			Usage: fmt.Sprintf("Whether to check if image auth is enabled during container creation. (default: %t)", defConf.EnableImageAuthorization),
+		},
+		cli.StringFlag{
+			Name:  "decryption-keys-path",
+			Usage: fmt.Sprintf("Path to load decryption keys from. (default: %q)", defConf.DecryptionKeysPath),
 		},
 		// XXX: DEPRECATED
 		cli.StringFlag{

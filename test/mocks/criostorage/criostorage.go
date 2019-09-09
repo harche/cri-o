@@ -7,6 +7,7 @@ package criostoragemock
 import (
 	copy "github.com/containers/image/copy"
 	types "github.com/containers/image/types"
+	config "github.com/containers/ocicrypt/config"
 	storage "github.com/containers/storage"
 	idtools "github.com/containers/storage/pkg/idtools"
 	storage0 "github.com/cri-o/cri-o/internal/pkg/storage"
@@ -35,6 +36,21 @@ func NewMockImageServer(ctrl *gomock.Controller) *MockImageServer {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockImageServer) EXPECT() *MockImageServerMockRecorder {
 	return m.recorder
+}
+
+// CanDecrypt mocks base method
+func (m *MockImageServer) CanDecrypt(arg0 *types.SystemContext, arg1 string, arg2 *copy.Options) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CanDecrypt", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CanDecrypt indicates an expected call of CanDecrypt
+func (mr *MockImageServerMockRecorder) CanDecrypt(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CanDecrypt", reflect.TypeOf((*MockImageServer)(nil).CanDecrypt), arg0, arg1, arg2)
 }
 
 // GetStore mocks base method
@@ -164,18 +180,18 @@ func (m *MockRuntimeServer) EXPECT() *MockRuntimeServerMockRecorder {
 }
 
 // CreateContainer mocks base method
-func (m *MockRuntimeServer) CreateContainer(arg0 *types.SystemContext, arg1, arg2, arg3, arg4, arg5, arg6, arg7 string, arg8 uint32, arg9 *idtools.IDMappings, arg10 []string) (storage0.ContainerInfo, error) {
+func (m *MockRuntimeServer) CreateContainer(arg0 *types.SystemContext, arg1, arg2, arg3, arg4, arg5, arg6, arg7 string, arg8 uint32, arg9 *idtools.IDMappings, arg10 []string, arg11 config.CryptoConfig) (storage0.ContainerInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateContainer", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+	ret := m.ctrl.Call(m, "CreateContainer", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
 	ret0, _ := ret[0].(storage0.ContainerInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateContainer indicates an expected call of CreateContainer
-func (mr *MockRuntimeServerMockRecorder) CreateContainer(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 interface{}) *gomock.Call {
+func (mr *MockRuntimeServerMockRecorder) CreateContainer(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContainer", reflect.TypeOf((*MockRuntimeServer)(nil).CreateContainer), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContainer", reflect.TypeOf((*MockRuntimeServer)(nil).CreateContainer), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
 }
 
 // CreatePodSandbox mocks base method

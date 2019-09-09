@@ -61,11 +61,13 @@ type StreamService struct {
 
 // Server implements the RuntimeService and ImageService
 type Server struct {
-	config          libconfig.Config
-	seccompProfile  *seccomp.Seccomp
-	stream          StreamService
-	netPlugin       ocicni.CNIPlugin
-	hostportManager hostport.HostPortManager
+	config                   libconfig.Config
+	seccompProfile           *seccomp.Seccomp
+	stream                   StreamService
+	netPlugin                ocicni.CNIPlugin
+	hostportManager          hostport.HostPortManager
+	decryptionKeysPath       string
+	enableImageAuthorization bool
 
 	appArmorProfile string
 	hostIP          string
@@ -354,6 +356,9 @@ func New(
 		defaultIDMappings: idMappings,
 		systemContext:     systemContext,
 	}
+
+	s.decryptionKeysPath = config.DecryptionKeysPath
+	s.enableImageAuthorization = config.EnableImageAuthorization
 
 	if s.seccompEnabled {
 		if config.SeccompProfile != "" {

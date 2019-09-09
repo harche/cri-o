@@ -16,12 +16,14 @@ require (
 	github.com/containers/buildah v1.10.1
 	github.com/containers/image v3.0.2+incompatible
 	github.com/containers/libpod v1.5.0
+	github.com/containers/ocicrypt v0.0.0-20190911194016-4e484bab285f
 	github.com/containers/storage v1.13.3
 	github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a
 	github.com/cpuguy83/go-md2man v1.0.10
 	github.com/cri-o/ocicni v0.1.1-0.20190702175919-7762645d18ca
 	github.com/docker/docker v0.7.3-0.20190410184157-6d18c6a06295
 	github.com/docker/go-units v0.4.0
+	github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-zoo/bone v1.3.0
 	github.com/godbus/dbus v4.1.0+incompatible
@@ -35,7 +37,7 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/opencontainers/go-digest v1.0.0-rc1
-	github.com/opencontainers/image-spec v1.0.1
+	github.com/opencontainers/image-spec v1.0.2-0.20190823105129-775207bd45b6
 	github.com/opencontainers/runc v1.0.0-rc8
 	github.com/opencontainers/runtime-spec v1.0.1
 	github.com/opencontainers/runtime-tools v0.9.0
@@ -50,7 +52,7 @@ require (
 	github.com/vbatts/git-validation v1.0.0
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa
+	golang.org/x/sys v0.0.0-20190902133755-9109b7679e13
 	google.golang.org/grpc v1.22.1
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
@@ -61,6 +63,7 @@ require (
 )
 
 replace (
+	github.com/containers/image => github.com/lumjjb/image v1.5.2-0.20190917123900-cdc25b63ae17
 	github.com/godbus/dbus => github.com/godbus/dbus v0.0.0-20190623212516-8a1682060722
 	github.com/opencontainers/runtime-spec => github.com/opencontainers/runtime-spec v0.1.2-0.20190408193819-a1b50f621a48
 	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20190807140250-28e88e3f19c3

@@ -179,6 +179,17 @@ type RuntimeConfig struct {
 	// The name is matched against the Runtimes map below.
 	DefaultRuntime string `toml:"default_runtime"`
 
+	// DecryptionKeysPath is the path where decryption keys should be kept.
+	DecryptionKeysPath string `toml:"decryption_keys_path"`
+
+	// EnableImageAuthorization determines if the image authorization on the
+	// encrypted images should be performed or not. If you are not going to use
+	// encrypted images then disabling this flag will give a performance boost
+	// while creating a container.
+	// However, if the encrypted images are used then enabling this flag is
+	// hightly recommended to prevent unauthorized access to encrypted images.
+	EnableImageAuthorization bool `toml:"enable_image_authorization"`
+
 	// Conmon is the path to conmon binary, used for managing the runtime.
 	Conmon string `toml:"conmon"`
 
@@ -448,7 +459,9 @@ func DefaultConfig() (*Config, error) {
 			GRPCMaxRecvMsgSize: defaultGRPCMaxMsgSize,
 		},
 		RuntimeConfig: RuntimeConfig{
-			DefaultRuntime: defaultRuntime,
+			DecryptionKeysPath:       "/etc/crio/keys/",
+			EnableImageAuthorization: false,
+			DefaultRuntime:           defaultRuntime,
 			Runtimes: Runtimes{
 				defaultRuntime: {
 					RuntimePath: "",
