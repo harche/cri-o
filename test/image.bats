@@ -11,6 +11,8 @@ IMAGE_LIST_DIGEST_AMD64=docker.io/library/alpine@sha256:bf1684a6e3676389ec861c60
 IMAGE_LIST_DIGEST_ARM64=docker.io/library/alpine@sha256:1032bdba4c5f88facf7eceb259c18deb28a51785eb35e469285a03eba78dd3fc
 IMAGE_LIST_DIGEST_PPC64LE=docker.io/library/alpine@sha256:cb238aa5b34dfd5e57ddfb1bfbb564f01df218e6f6453e4036b302e32bca8bb5
 IMAGE_LIST_DIGEST_S390X=docker.io/library/alpine@sha256:d438d3b6a72b602b70bd259ebfb344e388d8809c5abf691f6de397de8c9e4572
+ENCRYPTED_IMAGE=us.icr.io/ecins/encrypted_image:encrypted
+ENCRYPTED_IMAGE_CREDS=iamapikey:x_egxeGnaXi4GfKMbp0pYw0iErUAIjn5uYQIHTZ2RKof
 
 function setup() {
 	setup_test
@@ -152,6 +154,15 @@ function teardown() {
 	[ "$status" -eq 0 ]
 	echo "$output"
 	[ "$output" != "" ]
+	cleanup_images
+}
+
+@test "image pull with decryption" {
+	setup_decryption
+	start_crio "" ""
+	run crictl pull --creds "$ENCRYPTED_IMAGE_CREDS" "$ENCRYPTED_IMAGE"
+	echo "$output"
+	[ "$status" -eq 0 ]
 	cleanup_images
 }
 

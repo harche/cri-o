@@ -194,6 +194,7 @@ function setup_test() {
 	fi
 	CRIO_SOCKET="$TESTDIR/crio.sock"
 	CRIO_CONFIG="$TESTDIR/crio.conf"
+	CRIO_KEYS="$TESTDIR/keys/"
 	CRIO_CNI_CONFIG="$TESTDIR/cni/net.d/"
 	CRIO_LOG="$TESTDIR/crio.log"
 
@@ -247,6 +248,11 @@ function retry() {
 # Waits until crio becomes reachable.
 function wait_until_reachable() {
 	retry 15 1 crictl info
+}
+
+function setup_decryption() {
+	mkdir -p $CRIO_KEYS
+	cp "$TESTDATA"/keys/decryption.key $CRIO_KEYS
 }
 
 function setup_crio() {
