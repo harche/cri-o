@@ -5,6 +5,7 @@ package server
 import (
 	"fmt"
 
+	cryptoconfig "github.com/containers/ocicrypt/config"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
 	"github.com/cri-o/cri-o/internal/oci"
 	"github.com/opencontainers/runtime-tools/generate"
@@ -20,6 +21,6 @@ func addDevicesPlatform(sb *sandbox.Sandbox, containerConfig *pb.ContainerConfig
 	return nil
 }
 
-func (s *Server) createSandboxContainer(ctx context.Context, containerID string, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig) (*oci.Container, error) {
+func (s *Server) createSandboxContainer(ctx context.Context, containerID string, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig, cryptoConfig cryptoconfig.CryptoConfig) (*oci.Container, error) {
 	return nil, fmt.Errorf("not implemented yet")
 }

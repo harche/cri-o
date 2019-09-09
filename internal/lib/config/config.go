@@ -181,6 +181,9 @@ type RuntimeConfig struct {
 	// The name is matched against the Runtimes map below.
 	DefaultRuntime string `toml:"default_runtime"`
 
+	// DecryptionKeysPath is the path where decryption keys should be kept.
+	DecryptionKeysPath string `toml:"decryption_keys_path"`
+
 	// Conmon is the path to conmon binary, used for managing the runtime.
 	Conmon string `toml:"conmon"`
 
@@ -266,6 +269,14 @@ type RuntimeConfig struct {
 	// Will also set the readonly flag in the OCI Runtime Spec.  In this mode containers
 	// will only be able to write to volumes mounted into them
 	ReadOnly bool `toml:"read_only"`
+
+	// EnableImageAuthorization determines if the image authorization on the
+	// encrypted images should be performed or not. If you are not going to use
+	// encrypted images then disabling this flag will give a performance boost
+	// while creating a container.
+	// However, if the encrypted images are used then enabling this flag is
+	// hightly recommended to prevent unauthorized access to encrypted images.
+	EnableImageAuthorization bool `toml:"enable_image_authorization"`
 }
 
 // ImageConfig represents the "crio.image" TOML config table.
@@ -463,7 +474,9 @@ func DefaultConfig() (*Config, error) {
 			GRPCMaxRecvMsgSize: defaultGRPCMaxMsgSize,
 		},
 		RuntimeConfig: RuntimeConfig{
-			DefaultRuntime: defaultRuntime,
+			DecryptionKeysPath:       "/etc/crio/keys/",
+			EnableImageAuthorization: false,
+			DefaultRuntime:           defaultRuntime,
 			Runtimes: Runtimes{
 				defaultRuntime: {
 					RuntimePath: "",

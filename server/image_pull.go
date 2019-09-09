@@ -2,8 +2,11 @@ package server
 
 import (
 	"encoding/base64"
+	"os"
 	"strings"
 	"time"
+
+	encconfig "github.com/containers/ocicrypt/config"
 
 	"github.com/containers/image/copy"
 	"github.com/containers/image/types"
@@ -47,6 +50,15 @@ func (s *Server) PullImage(ctx context.Context, req *pb.PullImageRequest) (resp 
 				Password: password,
 			}
 		}
+	}
+
+	var cc encconfig.CryptoConfig
+	if _, err := os.Stat(s.decryptionKeysPath); err == nil {
+		cc, err = getDecryptionKeys(s.decryptionKeysPath)
+		if err != nil {
+			return nil, err
+		}
+		sourceCtx.CryptoConfig = &cc
 	}
 
 	var (

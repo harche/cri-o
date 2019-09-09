@@ -17,6 +17,7 @@ import (
 	"github.com/containers/libpod/pkg/apparmor"
 	"github.com/containers/libpod/pkg/rootless"
 	createconfig "github.com/containers/libpod/pkg/spec"
+	cryptoconfig "github.com/containers/ocicrypt/config"
 	libconfig "github.com/cri-o/cri-o/internal/lib/config"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
 	"github.com/cri-o/cri-o/internal/oci"
@@ -209,7 +210,7 @@ func makeAccessible(path string, uid, gid int) error {
 }
 
 // nolint:gocyclo
-func (s *Server) createSandboxContainer(ctx context.Context, containerID, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig) (*oci.Container, error) {
+func (s *Server) createSandboxContainer(ctx context.Context, containerID, containerName string, sb *sandbox.Sandbox, sandboxConfig *pb.PodSandboxConfig, containerConfig *pb.ContainerConfig, cryptoConfig cryptoconfig.CryptoConfig) (*oci.Container, error) {
 	if sb == nil {
 		return nil, errors.New("createSandboxContainer needs a sandbox")
 	}
@@ -352,7 +353,7 @@ func (s *Server) createSandboxContainer(ctx context.Context, containerID, contai
 		metadata.Name,
 		metadata.Attempt,
 		containerIDMappings,
-		labelOptions)
+		labelOptions, cryptoConfig)
 	if err != nil {
 		return nil, err
 	}

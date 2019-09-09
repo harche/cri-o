@@ -1,14 +1,19 @@
 package server
 
 import (
+	b64 "encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"net"
 	"os"
+	filepath "path"
 	"strings"
 	"time"
 
+	encconfig "github.com/containers/ocicrypt/config"
+	cryptUtils "github.com/containers/ocicrypt/utils"
 	libconfig "github.com/cri-o/cri-o/internal/lib/config"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
 	"github.com/cri-o/cri-o/server/metrics"
@@ -341,4 +346,37 @@ func validateHostIP(hostIP net.IP) error {
 		return fmt.Errorf("hostIP can't be an all zeros address")
 	}
 	return nil
+}
+
+// getDecryptionKeys reads the keys from the given directory
+func getDecryptionKeys(keysPath string) (encconfig.CryptoConfig, error) {
+	var cc encconfig.CryptoConfig
+
+	decryptionKeysFiles, err := ioutil.ReadDir(keysPath)
+	if err != nil {
+		return cc, err
+	}
+
+	base64Keys := make([]string, 0, len(decryptionKeysFiles))
+
+	for _, decryptionKeyFile := range decryptionKeysFiles {
+		privateKey, err := ioutil.ReadFile(filepath.Join(keysPath, decryptionKeyFile.Name()))
+		if err != nil {
+			return cc, err
+		}
+
+		// TODO - Remove the need to covert to base64. The ocicrypt library
+		// should provide a method to directly process the private keys
+		sEnc := b64.StdEncoding.EncodeToString(privateKey)
+		base64Keys = append(base64Keys, sEnc)
+	}
+
+	sortedDc, err := cryptUtils.SortDecryptionKeys(strings.Join(base64Keys, ","))
+	if err != nil {
+		return cc, err
+	}
+
+	cc = encconfig.InitDecryption(sortedDc)
+
+	return cc, nil
 }

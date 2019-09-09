@@ -108,6 +108,21 @@ default_runtime = "{{ .DefaultRuntime }}"
 # If true, the runtime will not use pivot_root, but instead use MS_MOVE.
 no_pivot = {{ .NoPivot }}
 
+# Decryption keys are used to decrypt the encrypted container images.
+[decryption.keys]
+
+# decryption_keys_path is the path where the keys required for
+# image decryption are located
+decryption_keys_path = "{{ .DecryptionKeysPath }}"
+
+# enable_image_authorization determines if the image authorization on the
+# encrypted images should be performed or not. If you are not going to use
+# encrypted images then disabling this flag will give a performance boost
+# while creating a container.
+# However, if the encrypted images are used then enabling this flag is
+# hightly recommended to prevent unauthorized access to encrypted images.
+enable_image_authorization = {{ .EnableImageAuthorization }}
+
 # Path to the conmon binary, used for monitoring the OCI runtime.
 # Will be searched for using $PATH if empty.
 conmon = "{{ .Conmon }}"

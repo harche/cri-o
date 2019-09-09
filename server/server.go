@@ -67,9 +67,10 @@ type Server struct {
 	netPlugin       ocicni.CNIPlugin
 	hostportManager hostport.HostPortManager
 
-	appArmorProfile string
-	hostIP          string
-	bindAddress     string
+	decryptionKeysPath string
+	appArmorProfile    string
+	hostIP             string
+	bindAddress        string
 
 	*lib.ContainerServer
 	monitorsChan      chan struct{}
@@ -78,8 +79,9 @@ type Server struct {
 
 	updateLock sync.RWMutex
 
-	seccompEnabled  bool
-	appArmorEnabled bool
+	seccompEnabled           bool
+	appArmorEnabled          bool
+	enableImageAuthorization bool
 }
 
 type certConfigCache struct {
@@ -354,6 +356,9 @@ func New(
 		defaultIDMappings: idMappings,
 		systemContext:     systemContext,
 	}
+
+	s.decryptionKeysPath = config.DecryptionKeysPath
+	s.enableImageAuthorization = config.EnableImageAuthorization
 
 	if s.seccompEnabled {
 		if config.SeccompProfile != "" {

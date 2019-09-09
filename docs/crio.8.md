@@ -70,6 +70,8 @@ crio
 [--host-ip=[value]]
 [--manage-network-ns-lifecycle]
 [--no-pivot]
+[--decryption-keys-path]
+[--enable-image-authorization]
 [--stream-enable-tls]
 [--stream-tls-ca=[value]]
 [--stream-tls-cert=[value]]
@@ -232,6 +234,10 @@ For the bind-mount conditions, only mounts explicitly requested by Kubernetes co
 **--manage-network-ns-lifecycle**: determines whether we pin and remove network namespace and manage its lifecycle (default: false)
 
 **--no-pivot**: if true, the runtime will not use `pivot_root`, but instead use `MS_MOVE` (default: false)
+
+**--decryption-keys-path**: Path where the keys required for image decryption are located.
+
+**--enable-image-authorization**: if true, image authorization is checked for every time container is created.
 
 **--stream-enable-tls**: enable encrypted TLS transport of the stream server (default: false)
 
