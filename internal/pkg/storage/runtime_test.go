@@ -50,6 +50,7 @@ var _ = t.Describe("Runtime", func() {
 			mockParseStoreReference(storeMock, "imagename"),
 			imageServerMock.EXPECT().GetStore().Return(storeMock),
 			mockGetStoreImage(storeMock, "docker.io/library/imagename:latest", "123"),
+			imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 			mockNewImage(storeMock, "docker.io/library/imagename:latest", "123"),
 			imageServerMock.EXPECT().GetStore().Return(storeMock),
 		)
@@ -559,7 +560,6 @@ var _ = t.Describe("Runtime", func() {
 					imageServerMock.EXPECT().GetStore().Return(storeMock),
 					storeMock.EXPECT().ContainerRunDirectory(gomock.Any()).
 						Return("runDir", nil),
-					imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				)
 			})
 
@@ -595,9 +595,6 @@ var _ = t.Describe("Runtime", func() {
 		It("should fail to create a container on invalid pod ID", func() {
 			// Given
 			// When
-			inOrder(
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
-			)
 			_, err := sut.CreateContainer(&types.SystemContext{},
 				"podName", "", "imagename",
 				"8a788232037eaf17794408ff3df6b922a1aedf9ef8de36afdae3ed0b0381907b",
@@ -612,9 +609,6 @@ var _ = t.Describe("Runtime", func() {
 		It("should fail to create a container on invalid pod name", func() {
 			// Given
 			// When
-			inOrder(
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
-			)
 			_, err := sut.CreateContainer(&types.SystemContext{},
 				"", "podID", "imagename",
 				"8a788232037eaf17794408ff3df6b922a1aedf9ef8de36afdae3ed0b0381907b",
@@ -629,9 +623,6 @@ var _ = t.Describe("Runtime", func() {
 		It("should fail to create a container on invalid image ID", func() {
 			// Given
 			// When
-			inOrder(
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
-			)
 			_, err := sut.CreateContainer(&types.SystemContext{},
 				"podName", "podID", "", "",
 				"containerName", "containerID", "metadataName",
@@ -645,9 +636,6 @@ var _ = t.Describe("Runtime", func() {
 		It("should fail to create a container on invalid container name", func() {
 			// Given
 			// When
-			inOrder(
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
-			)
 			_, err := sut.CreateContainer(&types.SystemContext{},
 				"podName", "podID", "imagename", "imageID",
 				"", "containerID", "metadataName",
@@ -677,7 +665,6 @@ var _ = t.Describe("Runtime", func() {
 					Return("", t.TestError),
 				imageServerMock.EXPECT().GetStore().Return(storeMock),
 				storeMock.EXPECT().DeleteContainer(gomock.Any()).Return(nil),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 			)
 
 			// When
@@ -706,7 +693,6 @@ var _ = t.Describe("Runtime", func() {
 				storeMock.EXPECT().ContainerDirectory(gomock.Any()).
 					Return("", t.TestError),
 				imageServerMock.EXPECT().GetStore().Return(storeMock),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				storeMock.EXPECT().DeleteContainer(gomock.Any()).Return(t.TestError),
 			)
 
@@ -725,7 +711,6 @@ var _ = t.Describe("Runtime", func() {
 			// Given
 			inOrder(
 				mockCreateContainerOrPodSandboxImageExists(),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				storeMock.EXPECT().CreateContainer(gomock.Any(), gomock.Any(),
 					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(&cs.Container{ID: "id"}, nil),
@@ -753,7 +738,6 @@ var _ = t.Describe("Runtime", func() {
 			// Given
 			inOrder(
 				mockCreateContainerOrPodSandboxImageExists(),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				storeMock.EXPECT().CreateContainer(gomock.Any(), gomock.Any(),
 					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(&cs.Container{ID: "id"}, nil),
@@ -799,7 +783,6 @@ var _ = t.Describe("Runtime", func() {
 			// Given
 			inOrder(
 				mockCreateContainerOrPodSandboxImageExists(),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				storeMock.EXPECT().CreateContainer(gomock.Any(), gomock.Any(),
 					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil, t.TestError),
@@ -823,6 +806,7 @@ var _ = t.Describe("Runtime", func() {
 				mockParseStoreReference(storeMock, "imagename"),
 				imageServerMock.EXPECT().GetStore().Return(storeMock),
 				mockGetStoreImage(storeMock, "docker.io/library/imagename:latest", "123"),
+				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 				// storageReference.newImage:
 				mockResolveImage(storeMock, "docker.io/library/imagename:latest", "123"),
 				storeMock.EXPECT().ImageBigData(gomock.Any(), gomock.Any()).
@@ -831,7 +815,6 @@ var _ = t.Describe("Runtime", func() {
 					Return([]string{""}, nil),
 				storeMock.EXPECT().ImageBigDataSize(gomock.Any(), gomock.Any()).
 					Return(int64(0), t.TestError),
-				imageServerMock.EXPECT().CanDecrypt(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil),
 			)
 
 			// When
