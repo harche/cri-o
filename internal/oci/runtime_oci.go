@@ -707,7 +707,10 @@ func (r *runtimeOCI) StopContainer(ctx context.Context, c *Container, timeout in
 			// even though we're not actively stopping anymore.
 			// Also, close the stopStoppingChan to tell
 			// routines waiting to change the stop timeout to give up.
-			close(c.stopStoppingChan)
+			_, ok := <-c.stopStoppingChan
+			if ok {
+				close(c.stopStoppingChan)
+			}
 			c.SetAsNotStopping()
 		}
 	}()
