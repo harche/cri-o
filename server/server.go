@@ -61,8 +61,9 @@ type Server struct {
 	hostportManager hostport.HostPortManager
 
 	*lib.ContainerServer
-	monitorsChan      chan struct{}
-	defaultIDMappings *idtools.IDMappings
+	monitorsChan        chan struct{}
+	defaultIDMappings   *idtools.IDMappings
+	ContainerEventsChan chan types.ContainerEventResponse
 
 	minimumMappableUID, minimumMappableGID int64
 
@@ -330,6 +331,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	close(s.ContainerEventsChan)
+
 	return nil
 }
 
@@ -423,6 +426,7 @@ func New(
 		minimumMappableGID:       config.MinimumMappableGID,
 		pullOperationsInProgress: make(map[pullArguments]*pullOperation),
 		resourceStore:            resourcestore.New(),
+		ContainerEventsChan:      make(chan types.ContainerEventResponse, 1000),
 	}
 
 	if err := configureMaxThreads(); err != nil {
@@ -672,6 +676,9 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 					log.Debugf(ctx, "Container or sandbox exited: %v", containerID)
 					c := s.GetContainer(containerID)
 					if c != nil {
+						// send event to kubelet over CRI
+
+						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, SandboxId: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata().Uid}
 						log.Debugf(ctx, "Container exited and found: %v", containerID)
 						err := s.Runtime().UpdateContainerStatus(ctx, c)
 						if err != nil {
@@ -687,7 +694,10 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 								log.Warnf(ctx, "No infra container set for sandbox: %v", containerID)
 								continue
 							}
+
 							log.Debugf(ctx, "Sandbox exited and found: %v", containerID)
+							// send event to kubelet over CRI
+							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, SandboxId: sb.Metadata().Uid}
 							err := s.Runtime().UpdateContainerStatus(ctx, c)
 							if err != nil {
 								log.Warnf(ctx, "Failed to update sandbox infra container status %s: %v", c.ID(), err)
@@ -699,6 +709,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 				}
 			case err := <-watcher.Errors:
 				log.Debugf(ctx, "Watch error: %v", err)
+				close(s.ContainerEventsChan)
 				close(done)
 				return
 			case <-s.monitorsChan:

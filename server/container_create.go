@@ -425,6 +425,8 @@ func (s *Server) CreateContainer(ctx context.Context, req *types.CreateContainer
 
 	newContainer.SetCreated()
 
+	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: newContainer.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_CREATED_EVENT, SandboxId: s.GetSandbox(newContainer.CRIContainer().PodSandboxId).Metadata().Uid}
+
 	log.Infof(ctx, "Created container %s: %s", newContainer.ID(), newContainer.Description())
 	return &types.CreateContainerResponse{
 		ContainerId: ctr.ID(),
