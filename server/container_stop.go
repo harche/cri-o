@@ -35,6 +35,8 @@ func (s *Server) StopContainer(ctx context.Context, req *types.StopContainerRequ
 		return err
 	}
 
+	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_DELETED_EVENT, SandboxId: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata().Uid}
+
 	log.Infof(ctx, "Stopped container %s: %s", c.ID(), c.Description())
 	return nil
 }
