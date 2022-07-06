@@ -58,7 +58,7 @@ func (s *Server) StartContainer(ctx context.Context, req *types.StartContainerRe
 		return fmt.Errorf("failed to start container %s: %v", c.ID(), err)
 	}
 
-	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_STARTED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+	// s.Config().ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_STARTED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 
 	log.WithFields(ctx, map[string]interface{}{
 		"description": c.Description(),

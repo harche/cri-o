@@ -22,7 +22,7 @@ func (s *Server) RemoveContainer(ctx context.Context, req *types.RemoveContainer
 		return err
 	}
 
-	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_DELETED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+	// s.Config().ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_DELETED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 
 	log.Infof(ctx, "Removed container %s: %s", c.ID(), c.Description())
 	return nil

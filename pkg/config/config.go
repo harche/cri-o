@@ -40,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	critypes "k8s.io/cri-api/pkg/apis/runtime/v1"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 )
 
@@ -64,6 +65,8 @@ const (
 // Config represents the entire set of configuration values that can be set for
 // the server. This is intended to be loaded from a toml-encoded config file.
 type Config struct {
+	ContainerEventsChan chan critypes.ContainerEventResponse
+
 	Comment          string
 	singleConfigPath string // Path to the single config file
 	dropInConfigDir  string // Path to the drop-in config files

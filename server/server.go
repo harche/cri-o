@@ -61,9 +61,9 @@ type Server struct {
 	hostportManager hostport.HostPortManager
 
 	*lib.ContainerServer
-	monitorsChan        chan struct{}
-	defaultIDMappings   *idtools.IDMappings
-	ContainerEventsChan chan types.ContainerEventResponse
+	monitorsChan      chan struct{}
+	defaultIDMappings *idtools.IDMappings
+	// ContainerEventsChan chan types.ContainerEventResponse
 
 	minimumMappableUID, minimumMappableGID int64
 
@@ -331,7 +331,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	close(s.ContainerEventsChan)
+	close(s.Config().ContainerEventsChan)
 
 	return nil
 }
@@ -382,6 +382,7 @@ func New(
 
 	useDefaultUmask()
 
+	config.ContainerEventsChan = make(chan types.ContainerEventResponse, 100000)
 	config.SystemContext.AuthFilePath = config.GlobalAuthFile
 	config.SystemContext.SignaturePolicyPath = config.SignaturePolicyPath
 
@@ -426,7 +427,7 @@ func New(
 		minimumMappableGID:       config.MinimumMappableGID,
 		pullOperationsInProgress: make(map[pullArguments]*pullOperation),
 		resourceStore:            resourcestore.New(),
-		ContainerEventsChan:      make(chan types.ContainerEventResponse, 1000),
+		// ContainerEventsChan:      make(chan types.ContainerEventResponse, 100000),
 	}
 
 	if err := configureMaxThreads(); err != nil {
@@ -678,7 +679,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 					if c != nil {
 						// send event to kubelet over CRI
 
-						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+						// s.Config().ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 						log.Debugf(ctx, "Container exited and found: %v", containerID)
 						err := s.Runtime().UpdateContainerStatus(ctx, c)
 						if err != nil {
@@ -697,7 +698,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 
 							log.Debugf(ctx, "Sandbox exited and found: %v", containerID)
 							// send event to kubelet over CRI
-							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
+							// s.Config().ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
 							err := s.Runtime().UpdateContainerStatus(ctx, c)
 							if err != nil {
 								log.Warnf(ctx, "Failed to update sandbox infra container status %s: %v", c.ID(), err)
@@ -709,7 +710,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 				}
 			case err := <-watcher.Errors:
 				log.Debugf(ctx, "Watch error: %v", err)
-				close(s.ContainerEventsChan)
+				close(s.Config().ContainerEventsChan)
 				close(done)
 				return
 			case <-s.monitorsChan:
