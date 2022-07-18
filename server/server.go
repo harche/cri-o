@@ -678,7 +678,6 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 					if c != nil {
 						// send event to kubelet over CRI
 
-						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 						log.Debugf(ctx, "Container exited and found: %v", containerID)
 						err := s.Runtime().UpdateContainerStatus(ctx, c)
 						if err != nil {
@@ -686,6 +685,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 						} else if err := s.ContainerStateToDisk(ctx, c); err != nil {
 							log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 						}
+						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 					} else {
 						sb := s.GetSandbox(containerID)
 						if sb != nil {
@@ -697,13 +697,14 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 
 							log.Debugf(ctx, "Sandbox exited and found: %v", containerID)
 							// send event to kubelet over CRI
-							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
+
 							err := s.Runtime().UpdateContainerStatus(ctx, c)
 							if err != nil {
 								log.Warnf(ctx, "Failed to update sandbox infra container status %s: %v", c.ID(), err)
 							} else if err := s.ContainerStateToDisk(ctx, c); err != nil {
 								log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 							}
+							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
 						}
 					}
 				}
