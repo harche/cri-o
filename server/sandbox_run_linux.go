@@ -940,6 +940,10 @@ func (s *Server) runPodSandbox(ctx context.Context, req *types.RunPodSandboxRequ
 		return nil, err
 	}
 
+	s.Runtime().UpdateContainerStatus(ctx, sb.InfraContainer()) // TODO - handle returned error
+	// time.Sleep(3 * time.Second)                                 // TODO - remove this sleep
+	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: sb.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_CREATED_EVENT, PodSandboxMetadata: sb.Metadata()}
+
 	if err := s.Runtime().StartContainer(ctx, container); err != nil {
 		return nil, err
 	}
@@ -983,6 +987,8 @@ func (s *Server) runPodSandbox(ctx context.Context, req *types.RunPodSandboxRequ
 	}
 	sb.SetCreated()
 
+	s.Runtime().UpdateContainerStatus(ctx, sb.InfraContainer()) // TODO - handle returned error
+	// time.Sleep(3 * time.Second)                                 // TODO - remove this sleep
 	s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: sb.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_STARTED_EVENT, PodSandboxMetadata: sb.Metadata()}
 
 	log.Infof(ctx, "Ran pod sandbox %s with infra container: %s", container.ID(), container.Description())
