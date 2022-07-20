@@ -685,6 +685,7 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 						} else if err := s.ContainerStateToDisk(ctx, c); err != nil {
 							log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 						}
+						// time.Sleep(time.Second * 2)
 						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
 					} else {
 						sb := s.GetSandbox(containerID)
@@ -704,6 +705,8 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 							} else if err := s.ContainerStateToDisk(ctx, c); err != nil {
 								log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 							}
+							// time.Sleep(time.Second * 2)
+
 							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
 						}
 					}
