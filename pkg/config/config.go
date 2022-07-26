@@ -397,6 +397,9 @@ type RuntimeConfig struct {
 	// will cause a container creation to fail (as opposed to the current behavior of creating a directory).
 	AbsentMountSourcesToReject []string `toml:"absent_mount_sources_to_reject"`
 
+	// EventedPLEG specifies whether the events should be sent to Kubelet to avoid frequent relisting of containers.
+	EventedPLEG bool `toml:"evented_pleg"`
+
 	// seccompConfig is the internal seccomp configuration
 	seccompConfig *seccomp.Config
 

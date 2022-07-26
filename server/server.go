@@ -331,7 +331,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	close(s.ContainerEventsChan)
+	if s.config.EventedPLEG {
+		close(s.ContainerEventsChan)
+	}
 
 	return nil
 }
@@ -426,9 +428,10 @@ func New(
 		minimumMappableGID:       config.MinimumMappableGID,
 		pullOperationsInProgress: make(map[pullArguments]*pullOperation),
 		resourceStore:            resourcestore.New(),
-		ContainerEventsChan:      make(chan types.ContainerEventResponse, 1000),
 	}
-
+	if s.config.EventedPLEG {
+		s.ContainerEventsChan = make(chan types.ContainerEventResponse, 1000)
+	}
 	if err := configureMaxThreads(); err != nil {
 		return nil, err
 	}
@@ -686,7 +689,9 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 							log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 						}
 						// time.Sleep(time.Second * 2)
-						s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+						if s.config.EventedPLEG {
+							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+						}
 					} else {
 						sb := s.GetSandbox(containerID)
 						if sb != nil {
@@ -706,14 +711,17 @@ func (s *Server) StartExitMonitor(ctx context.Context) {
 								log.Warnf(ctx, "Unable to write containers %s state to disk: %v", c.ID(), err)
 							}
 							// time.Sleep(time.Second * 2)
-
-							s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
+							if s.config.EventedPLEG {
+								s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, PodSandboxMetadata: sb.Metadata()}
+							}
 						}
 					}
 				}
 			case err := <-watcher.Errors:
 				log.Debugf(ctx, "Watch error: %v", err)
-				close(s.ContainerEventsChan)
+				if s.config.EventedPLEG {
+					close(s.ContainerEventsChan)
+				}
 				close(done)
 				return
 			case <-s.monitorsChan:
