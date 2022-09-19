@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/containers/storage"
 	"github.com/cri-o/cri-o/internal/lib/sandbox"
@@ -87,14 +86,9 @@ func (s *Server) stopPodSandbox(ctx context.Context, sb *sandbox.Sandbox) error 
 	log.Infof(ctx, "Stopped pod sandbox: %s", sb.ID())
 	sb.SetStopped(true)
 	if s.config.EventedPLEG {
-		if err := s.Runtime().UpdateContainerStatus(ctx, sb.InfraContainer()); err != nil {
-			return fmt.Errorf("failed to update the container %s status in the pod sandbox %s: %w", sb.InfraContainer().ID(), sb.ID(), err)
-		}
-		select {
-		case s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: sb.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_DELETED_EVENT, CreatedAt: time.Now().UnixNano(), PodSandboxMetadata: sb.Metadata()}:
-			log.Debugf(ctx, "Container deleted event generated for sandbox %s", sb.ID())
-		default:
-			log.Errorf(ctx, "StopSb: failed to send container deleted event for sandbox %s", sb.ID())
+		err := s.generateCRIEvent(ctx, sb.InfraContainer(), types.ContainerEventType_CONTAINER_STOPPED_EVENT)
+		if err != nil {
+			log.Errorf(ctx, "Unable to generate event %s for container %s due to err %s", types.ContainerEventType_CONTAINER_CREATED_EVENT, sb.InfraContainer().ID(), err)
 		}
 	}
 

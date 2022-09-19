@@ -89,6 +89,7 @@ service RuntimeService {
     // Once it returns error, new container log file MUST NOT be created.
     rpc ReopenContainerLog(ReopenContainerLogRequest) returns (ReopenContainerLogResponse) {}
 
+
     // ExecSync runs a command in a container synchronously.
     rpc ExecSync(ExecSyncRequest) returns (ExecSyncResponse) {}
     // Exec prepares a streaming endpoint to execute a command in the container.
@@ -121,6 +122,8 @@ service RuntimeService {
 
     // GetContainerEvents gets container events from the CRI runtime
     rpc  GetContainerEvents(GetEventsRequest) returns (stream ContainerEventResponse) {}
+
+    rpc GetPodStatus(GetPodStatusRequest) returns (GetPodStatusResponse) {}
 
 }
 
@@ -1589,6 +1592,12 @@ message ContainerEventResponse {
 
     // ID of the sandbox container
     PodSandboxMetadata pod_sandbox_metadata = 4;
+
+    // Sandbox statuses
+    repeated PodSandboxStatus pod_sandbox_statuses = 5;
+
+    // Container statuses
+    repeated ContainerStatus containers_statuses = 6;
 }
 
 enum ContainerEventType {
@@ -1604,3 +1613,17 @@ enum ContainerEventType {
     // Container deleted
     CONTAINER_DELETED_EVENT = 3;
 }
+
+message GetPodStatusRequest {
+    string pod_uid = 1;
+}
+
+message GetPodStatusResponse {
+    // Sandbox statuses
+    repeated PodSandboxStatus pod_sandbox_statuses = 1;
+    // Container statuses
+    repeated ContainerStatus containers_statuses = 2;
+    // Timestamp at which container and pod statuses were recorded
+    int64 timestamp = 3;
+}
+

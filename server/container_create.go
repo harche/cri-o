@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/mount"
@@ -408,14 +407,9 @@ func (s *Server) CreateContainer(ctx context.Context, req *types.CreateContainer
 	newContainer.SetCreated()
 
 	if s.config.EventedPLEG {
-		if err := s.Runtime().UpdateContainerStatus(ctx, newContainer); err != nil {
-			return nil, fmt.Errorf("failed to update the container status %s: %w", newContainer.ID(), err)
-		}
-		select {
-		case s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: newContainer.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_CREATED_EVENT, CreatedAt: time.Now().UnixNano(), PodSandboxMetadata: s.GetSandbox(newContainer.CRIContainer().PodSandboxId).Metadata()}:
-			log.Debugf(ctx, "Container created event generated for %s", newContainer.ID())
-		default:
-			log.Errorf(ctx, "CreateCtr: failed to send container created event %s", newContainer.ID())
+		err := s.generateCRIEvent(ctx, newContainer, types.ContainerEventType_CONTAINER_CREATED_EVENT)
+		if err != nil {
+			log.Errorf(ctx, "Unable to generate event %s for container %s due to err %s", types.ContainerEventType_CONTAINER_CREATED_EVENT, newContainer.ID(), err)
 		}
 	}
 

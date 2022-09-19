@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -723,9 +724,145 @@ func (s *Server) handleExit(ctx context.Context, event fsnotify.Event) {
 		log.Warnf(ctx, "Unable to write %s %s state to disk: %v", resource, c.ID(), err)
 	}
 	if s.config.EventedPLEG {
-		s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: containerID, ContainerEventType: types.ContainerEventType_CONTAINER_STOPPED_EVENT, CreatedAt: time.Now().UnixNano(), PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}
+		err := s.generateCRIEvent(ctx, c, types.ContainerEventType_CONTAINER_STOPPED_EVENT)
+		if err != nil {
+			log.Warnf(ctx, "Unable to generate event %s for container %s due to err %s", types.ContainerEventType_CONTAINER_STOPPED_EVENT, c.ID(), err)
+		}
 	}
 	if err := os.Remove(event.Name); err != nil {
 		log.Warnf(ctx, "Failed to remove exit file: %v", err)
 	}
+}
+
+func (s *Server) getSandboxStatuses(ctx context.Context, sandboxId string) ([]*types.PodSandboxStatus, error) {
+	sandboxStatusRequest := &types.PodSandboxStatusRequest{PodSandboxId: sandboxId}
+	sandboxStatus, err := s.PodSandboxStatus(ctx, sandboxStatusRequest)
+
+	if IsNotFound(err) {
+		return []*types.PodSandboxStatus{}, err
+	}
+
+	if err != nil {
+		return []*types.PodSandboxStatus{}, err
+	}
+
+	return []*types.PodSandboxStatus{sandboxStatus.GetStatus()}, nil
+}
+
+func (s *Server) getContainerStatuses(ctx context.Context, sandboxUid string) ([]*types.ContainerStatus, error) {
+	listContainerRequest := &types.ListContainersRequest{Filter: &types.ContainerFilter{LabelSelector: map[string]string{"io.kubernetes.pod.uid": sandboxUid}}}
+	containers, err := s.ListContainers(ctx, listContainerRequest)
+
+	if err != nil {
+		return []*types.ContainerStatus{}, err
+	}
+
+	containerStatuses := []*types.ContainerStatus{}
+	for _, cc := range containers.GetContainers() {
+		containerStatusRequest := &types.ContainerStatusRequest{ContainerId: cc.Id, Verbose: false}
+		resp, err := s.ContainerStatus(ctx, containerStatusRequest)
+		if IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return []*types.ContainerStatus{}, err
+		}
+		containerStatuses = append(containerStatuses, resp.GetStatus())
+
+	}
+
+	return containerStatuses, nil
+}
+
+func (s *Server) generateCRIEvent(ctx context.Context, container *oci.Container, eventType types.ContainerEventType) error {
+	if err := s.Runtime().UpdateContainerStatus(ctx, container); err != nil {
+		return fmt.Errorf("generateCRIEvent: failed to update the container status %s: %w", container.ID(), err)
+	}
+
+	if !s.HasSandbox(container.Sandbox()) {
+		return nil
+	}
+
+	sandboxStatuses, err := s.getSandboxStatuses(ctx, s.GetSandbox(container.Sandbox()).ID())
+	sandboxMetaData := s.GetSandbox(container.CRIContainer().PodSandboxId).Metadata()
+
+	if IsNotFound(err) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("generateCRIEvent: failed to get sandbox statuses of the pod %s due to err %v", sandboxMetaData.Uid, err)
+	}
+
+	containerStatuses, err := s.getContainerStatuses(ctx, sandboxMetaData.Uid)
+
+	if err != nil {
+		return fmt.Errorf("generateCRIEvent: failed to get container statuses of the pod %s due to err %v", sandboxMetaData.Uid, err)
+	}
+
+	select {
+	case s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: container.ID(), ContainerEventType: eventType, CreatedAt: time.Now().UnixNano(),
+		PodSandboxMetadata: sandboxMetaData, PodSandboxStatuses: sandboxStatuses, ContainersStatuses: containerStatuses}:
+		log.Debugf(ctx, "Container event %s generated for %s", eventType, container.ID())
+	default:
+		return fmt.Errorf("generateCRIEvent: failed to generate event %s for container %s", eventType, container.ID())
+	}
+
+	return err
+}
+
+// Newest first.
+type podSandboxByCreated []*types.PodSandbox
+
+func (p podSandboxByCreated) Len() int           { return len(p) }
+func (p podSandboxByCreated) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p podSandboxByCreated) Less(i, j int) bool { return p[i].CreatedAt > p[j].CreatedAt }
+
+func (s *Server) GetPodStatus(ctx context.Context, podUid string) (types.GetPodStatusResponse, error) {
+
+	filter := &types.PodSandboxFilter{
+		LabelSelector: map[string]string{"io.kubernetes.pod.uid": podUid},
+	}
+
+	req := &types.ListPodSandboxRequest{
+		Filter: filter,
+	}
+	listPodSandoxResponse, err := s.ListPodSandbox(ctx, req)
+	if err != nil {
+		return types.GetPodStatusResponse{}, err
+	}
+
+	sandboxes := listPodSandoxResponse.Items
+	if len(sandboxes) == 0 {
+		// return types.GetPodStatusResponse{}, fmt.Errorf("GetPodStatus: No sandbox found for pod uid %s", podUid)
+	}
+	sandboxIDs := make([]string, len(sandboxes))
+	sort.Sort(podSandboxByCreated(sandboxes))
+
+	for i, s := range sandboxes {
+		sandboxIDs[i] = s.Id
+	}
+
+	sandboxStatuses := []*types.PodSandboxStatus{}
+	for _, podSandboxID := range sandboxIDs {
+		sandboxStatusesList, err := s.getSandboxStatuses(ctx, podSandboxID)
+		if IsNotFound(err) {
+			continue
+		}
+		if len(sandboxStatusesList) == 0 {
+			continue
+		}
+		sandboxStatuses = append(sandboxStatuses, sandboxStatusesList...)
+	}
+
+	containerStatuses, err := s.getContainerStatuses(ctx, podUid)
+	if err != nil {
+		return types.GetPodStatusResponse{}, err
+	}
+
+	return types.GetPodStatusResponse{
+		PodSandboxStatuses: sandboxStatuses,
+		ContainersStatuses: containerStatuses,
+		Timestamp:          time.Now().Unix(),
+	}, nil
 }

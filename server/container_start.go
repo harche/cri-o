@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/cri-o/cri-o/internal/log"
 	oci "github.com/cri-o/cri-o/internal/oci"
@@ -58,15 +57,11 @@ func (s *Server) StartContainer(ctx context.Context, req *types.StartContainerRe
 	if err := s.Runtime().StartContainer(ctx, c); err != nil {
 		return fmt.Errorf("failed to start container %s: %w", c.ID(), err)
 	}
+
 	if s.config.EventedPLEG {
-		if err := s.Runtime().UpdateContainerStatus(ctx, c); err != nil {
-			return fmt.Errorf("failed to update the container status %s: %w", c.ID(), err)
-		}
-		select {
-		case s.ContainerEventsChan <- types.ContainerEventResponse{ContainerId: c.ID(), ContainerEventType: types.ContainerEventType_CONTAINER_STARTED_EVENT, CreatedAt: time.Now().UnixNano(), PodSandboxMetadata: s.GetSandbox(c.CRIContainer().PodSandboxId).Metadata()}:
-			log.Debugf(ctx, "Container started event generated for %s", c.ID())
-		default:
-			log.Errorf(ctx, "StartCtr: failed to send container started event %s", c.ID())
+		err := s.generateCRIEvent(ctx, c, types.ContainerEventType_CONTAINER_STARTED_EVENT)
+		if err != nil {
+			log.Errorf(ctx, "Unable to generate event %s for container %s due to err %s", types.ContainerEventType_CONTAINER_STARTED_EVENT, c.ID(), err)
 		}
 	}
 
@@ -77,4 +72,16 @@ func (s *Server) StartContainer(ctx context.Context, req *types.StartContainerRe
 		"PID":         state.Pid,
 	}).Infof("Started container")
 	return nil
+}
+
+func IsNotFound(err error) bool {
+	s, ok := status.FromError(err)
+	if !ok {
+		return ok
+	}
+	if s.Code() == codes.NotFound {
+		return true
+	}
+
+	return false
 }
