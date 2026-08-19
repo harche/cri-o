@@ -704,6 +704,11 @@ type ImageConfig struct {
 	// ImageContentCacheDir is the directory where compressed layer blobs are cached
 	// for P2P image distribution. If empty, CRI-O will not retain the image content cache.
 	ImageContentCacheDir string `toml:"image_content_cache_dir"`
+	// ImageContentCacheRegistries limits the image content cache to images whose reference starts
+	// with one of these prefixes (e.g. "quay.io", "quay.io/myorg"). Empty means all images.
+	// Images not matching bypass the caching destination wrapper entirely (which also keeps
+	// sigstore signature writes and partial pulls on the native path for them).
+	ImageContentCacheRegistries []string `toml:"image_content_cache_registries"`
 }
 
 // NetworkConfig represents the "crio.network" TOML config table.

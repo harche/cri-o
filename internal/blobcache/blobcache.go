@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,8 @@ var (
 // BlobCache manages compressed layer blobs for P2P distribution.
 // It is thread-safe for concurrent access within a single process.
 type BlobCache struct {
+	allowedPrefixes []string
+
 	rootDir      string
 	metadataPath string
 	metadata     *Metadata
@@ -369,4 +372,24 @@ func drainReader(ctx context.Context, reader io.Reader) {
 	if _, err := io.Copy(io.Discard, reader); err != nil {
 		log.Warnf(ctx, "Failed to drain reader: %v", err)
 	}
+}
+
+// SetAllowedPrefixes restricts caching to image references (registry/repository) with one of the given prefixes.
+// An empty list allows everything.
+func (bc *BlobCache) SetAllowedPrefixes(prefixes []string) {
+	bc.allowedPrefixes = prefixes
+}
+
+// Allows reports whether the image reference (registry/repository) should be cached.
+func (bc *BlobCache) Allows(ref string) bool {
+	if len(bc.allowedPrefixes) == 0 {
+		return true
+	}
+	for _, p := range bc.allowedPrefixes {
+		p = strings.TrimSuffix(p, "/")
+		if ref == p || strings.HasPrefix(ref, p+"/") {
+			return true
+		}
+	}
+	return false
 }

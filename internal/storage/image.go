@@ -658,6 +658,8 @@ type pullImageArgs struct {
 
 	// Image content cache configuration
 	ImageContentCacheDir string
+	// ImageContentCacheRegistries is the allowlist of image reference prefixes for the content cache.
+	ImageContentCacheRegistries []string
 }
 
 type pullImageOutputItem struct {
@@ -713,6 +715,10 @@ func pullImageChild() {
 			fmt.Fprintf(os.Stderr, "initializing image content cache: %v\n", err)
 			os.Exit(1)
 		}
+	}
+
+	if blobCache != nil {
+		blobCache.SetAllowedPrefixes(args.ImageContentCacheRegistries)
 	}
 
 	canonicalRef, err := pullImageImplementation(context.Background(), args.Lookup, store, imageName, args.Options, blobCache)
@@ -786,7 +792,8 @@ func (svc *imageService) pullImageParent(ctx context.Context, imageName Registry
 			UIDMap:             svc.store.UIDMap(),
 			GIDMap:             svc.store.GIDMap(),
 		},
-		ImageContentCacheDir: svc.config.ImageContentCacheDir,
+		ImageContentCacheDir:        svc.config.ImageContentCacheDir,
+		ImageContentCacheRegistries: svc.config.ImageContentCacheRegistries,
 	}
 
 	stdinArguments.Options.Progress = nil
@@ -920,6 +927,8 @@ func pullImageImplementation(ctx context.Context, lookup *imageLookupService, st
 		registry, repository, err := ParseRegistryAndRepository(imageName.StringForOutOfProcessConsumptionOnly())
 		if err != nil {
 			logrus.Warnf("Failed to parse registry/repository for blob cache: %v", err)
+		} else if !blobCache.Allows(registry + "/" + repository) {
+			logrus.Debugf("Blob caching skipped for %s/%s (not in image_content_cache_registries)", registry, repository)
 		} else {
 			copyDestRef = NewBlobCachingReference(destRef, blobCache, registry, repository)
 			logrus.Debugf("Blob caching enabled for %s/%s", registry, repository)
@@ -1287,6 +1296,9 @@ func GetImageService(ctx context.Context, store storage.Store, storageTransport 
 	// Initialize image content cache if enabled
 	if serverConfig.ImageContentCacheDir != "" {
 		blobCache, err := blobcache.New(ctx, serverConfig.ImageContentCacheDir)
+		if err == nil {
+			blobCache.SetAllowedPrefixes(serverConfig.ImageContentCacheRegistries)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("initializing image content cache: %w", err)
 		}
