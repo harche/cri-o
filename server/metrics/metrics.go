@@ -84,24 +84,6 @@ type Metrics struct {
 	metricResourcesStalledAtStage              *prometheus.CounterVec
 	metricContainersStoppedMonitorCount        *prometheus.CounterVec
 	metricDefaultRuntime                       *prometheus.GaugeVec
-	config                                     *libconfig.MetricsConfig
-	metricImagePullsLayerSize                  prometheus.Histogram
-	metricContainersEventsDropped              prometheus.Counter
-	metricContainersOOMTotal                   prometheus.Counter
-	metricProcessesDefunct                     prometheus.GaugeFunc
-	metricOperationsTotal                      *prometheus.CounterVec
-	metricOperationsLatencySeconds             *prometheus.GaugeVec
-	metricOperationsLatencySecondsTotal        *prometheus.SummaryVec
-	metricOperationsErrorsTotal                *prometheus.CounterVec
-	metricImagePullsBytesTotal                 *prometheus.CounterVec
-	metricImagePullsSkippedBytesTotal          *prometheus.CounterVec
-	metricImagePullsFailureTotal               *prometheus.CounterVec
-	metricImagePullsSuccessTotal               prometheus.Counter
-	metricImageLayerReuseTotal                 *prometheus.CounterVec
-	metricContainersOOMCountTotal              *prometheus.CounterVec
-	metricContainersSeccompNotifierCountTotal  *prometheus.CounterVec
-	metricResourcesStalledAtStage              *prometheus.CounterVec
-	metricContainersStoppedMonitorCount        *prometheus.CounterVec
 	metricImageContentCacheGCTotal             prometheus.Counter
 	metricImageContentCacheGCDurationSeconds   prometheus.Histogram
 	metricImageContentCacheGCBlobsRemovedTotal prometheus.Counter
