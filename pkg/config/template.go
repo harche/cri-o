@@ -1630,6 +1630,10 @@ const templateStringCrioImageContentCacheDir = `# The directory where compressed
 # When set, enables caching of compressed image layers that can be served to peer nodes.
 # If empty, CRI-O will not retain the image content cache.
 {{ $.Comment }}image_content_cache_dir = "{{ .ImageContentCacheDir }}"
+
+{{ $.Comment }}# Restrict the image content cache to image references with these prefixes. Empty = all.
+{{ $.Comment }}image_content_cache_registries = [
+{{ range $opt := .ImageContentCacheRegistries }}{{ $.Comment }}{{ printf "\t%q,\n" $opt }}{{ end }}{{ $.Comment }}]
 `
 
 const templateStringCrioNetwork = `# The crio.network table containers settings pertaining to the management of
