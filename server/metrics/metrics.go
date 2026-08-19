@@ -64,26 +64,26 @@ func GetSizeBucket(size float64) string {
 
 // Metrics is the main structure for starting the metrics endpoints.
 type Metrics struct {
-	config                                    *libconfig.MetricsConfig
-	apiConfig                                 *libconfig.APIConfig
-	metricImagePullsLayerSize                 prometheus.Histogram
-	metricContainersEventsDropped             prometheus.Counter
-	metricContainersOOMTotal                  prometheus.Counter
-	metricProcessesDefunct                    prometheus.GaugeFunc
-	metricOperationsTotal                     *prometheus.CounterVec
-	metricOperationsLatencySeconds            *prometheus.GaugeVec
-	metricOperationsLatencySecondsTotal       *prometheus.SummaryVec
-	metricOperationsErrorsTotal               *prometheus.CounterVec
-	metricImagePullsBytesTotal                *prometheus.CounterVec
-	metricImagePullsSkippedBytesTotal         *prometheus.CounterVec
-	metricImagePullsFailureTotal              *prometheus.CounterVec
-	metricImagePullsSuccessTotal              prometheus.Counter
-	metricImageLayerReuseTotal                *prometheus.CounterVec
-	metricContainersOOMCountTotal             *prometheus.CounterVec
-	metricContainersSeccompNotifierCountTotal *prometheus.CounterVec
-	metricResourcesStalledAtStage             *prometheus.CounterVec
-	metricContainersStoppedMonitorCount       *prometheus.CounterVec
-	metricDefaultRuntime                      *prometheus.GaugeVec
+	config                                     *libconfig.MetricsConfig
+	apiConfig                                  *libconfig.APIConfig
+	metricImagePullsLayerSize                  prometheus.Histogram
+	metricContainersEventsDropped              prometheus.Counter
+	metricContainersOOMTotal                   prometheus.Counter
+	metricProcessesDefunct                     prometheus.GaugeFunc
+	metricOperationsTotal                      *prometheus.CounterVec
+	metricOperationsLatencySeconds             *prometheus.GaugeVec
+	metricOperationsLatencySecondsTotal        *prometheus.SummaryVec
+	metricOperationsErrorsTotal                *prometheus.CounterVec
+	metricImagePullsBytesTotal                 *prometheus.CounterVec
+	metricImagePullsSkippedBytesTotal          *prometheus.CounterVec
+	metricImagePullsFailureTotal               *prometheus.CounterVec
+	metricImagePullsSuccessTotal               prometheus.Counter
+	metricImageLayerReuseTotal                 *prometheus.CounterVec
+	metricContainersOOMCountTotal              *prometheus.CounterVec
+	metricContainersSeccompNotifierCountTotal  *prometheus.CounterVec
+	metricResourcesStalledAtStage              *prometheus.CounterVec
+	metricContainersStoppedMonitorCount        *prometheus.CounterVec
+	metricDefaultRuntime                       *prometheus.GaugeVec
 	config                                     *libconfig.MetricsConfig
 	metricImagePullsLayerSize                  prometheus.Histogram
 	metricContainersEventsDropped              prometheus.Counter
@@ -280,6 +280,7 @@ func New(config *libconfig.MetricsConfig, apiConfig *libconfig.APIConfig) *Metri
 				Help:      "Default container runtime configured. Value is always 1.",
 			},
 			[]string{"runtime"},
+		),
 		metricImageContentCacheGCTotal: prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Subsystem: collectors.Subsystem,
@@ -522,6 +523,8 @@ func (m *Metrics) MetricDefaultRuntimeSet(runtime string) {
 	}
 
 	g.Set(1)
+}
+
 // MetricImageContentCacheGCRecord records metrics for a completed GC operation.
 func (m *Metrics) MetricImageContentCacheGCRecord(durationSeconds float64, blobsRemoved, bytesFreed int64) {
 	m.metricImageContentCacheGCTotal.Inc()
@@ -533,24 +536,6 @@ func (m *Metrics) MetricImageContentCacheGCRecord(durationSeconds float64, blobs
 // createEndpoint creates a /metrics endpoint for prometheus monitoring.
 func (m *Metrics) createEndpoint() (*http.ServeMux, error) {
 	for collector, metric := range map[collectors.Collector]prometheus.Collector{
-		collectors.ContainersEventsDropped:             m.metricContainersEventsDropped,
-		collectors.ContainersOOMCountTotal:             m.metricContainersOOMCountTotal,
-		collectors.ContainersOOMTotal:                  m.metricContainersOOMTotal,
-		collectors.ContainersSeccompNotifierCountTotal: m.metricContainersSeccompNotifierCountTotal,
-		collectors.ImageLayerReuseTotal:                m.metricImageLayerReuseTotal,
-		collectors.ImagePullsBytesTotal:                m.metricImagePullsBytesTotal,
-		collectors.ImagePullsFailureTotal:              m.metricImagePullsFailureTotal,
-		collectors.ImagePullsLayerSize:                 m.metricImagePullsLayerSize,
-		collectors.ImagePullsSkippedBytesTotal:         m.metricImagePullsSkippedBytesTotal,
-		collectors.ImagePullsSuccessTotal:              m.metricImagePullsSuccessTotal,
-		collectors.OperationsErrorsTotal:               m.metricOperationsErrorsTotal,
-		collectors.OperationsLatencySeconds:            m.metricOperationsLatencySeconds,
-		collectors.OperationsLatencySecondsTotal:       m.metricOperationsLatencySecondsTotal,
-		collectors.OperationsTotal:                     m.metricOperationsTotal,
-		collectors.ProcessesDefunct:                    m.metricProcessesDefunct,
-		collectors.ResourcesStalledAtStage:             m.metricResourcesStalledAtStage,
-		collectors.ContainersStoppedMonitorCount:       m.metricContainersStoppedMonitorCount,
-		collectors.DefaultRuntime:                      m.metricDefaultRuntime,
 		collectors.ContainersEventsDropped:              m.metricContainersEventsDropped,
 		collectors.ContainersOOMCountTotal:              m.metricContainersOOMCountTotal,
 		collectors.ContainersOOMTotal:                   m.metricContainersOOMTotal,
@@ -568,6 +553,7 @@ func (m *Metrics) createEndpoint() (*http.ServeMux, error) {
 		collectors.ProcessesDefunct:                     m.metricProcessesDefunct,
 		collectors.ResourcesStalledAtStage:              m.metricResourcesStalledAtStage,
 		collectors.ContainersStoppedMonitorCount:        m.metricContainersStoppedMonitorCount,
+		collectors.DefaultRuntime:                       m.metricDefaultRuntime,
 		collectors.ImageContentCacheGCTotal:             m.metricImageContentCacheGCTotal,
 		collectors.ImageContentCacheGCDurationSeconds:   m.metricImageContentCacheGCDurationSeconds,
 		collectors.ImageContentCacheGCBlobsRemovedTotal: m.metricImageContentCacheGCBlobsRemovedTotal,
