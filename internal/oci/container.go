@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -698,6 +699,15 @@ func (c *Container) Spoofed() bool {
 	return c.spoofed
 }
 
+// setFinishedIfUnset records now as the finish time unless one is already
+// known, for example because it was recovered from the exit file. The stop
+// loop's completion time is only a fallback and must not overwrite it.
+func (c *Container) setFinishedIfUnset() {
+	if c.state.Finished.IsZero() {
+		c.state.Finished = time.Now()
+	}
+}
+
 // SetAsStopping marks a container as being stopped.
 // Returns true if the container was not set as stopping before, and false otherwise (i.e. on subsequent calls).".
 func (c *Container) SetAsStopping() (setToStopping bool) {
@@ -757,6 +767,10 @@ func (c *Container) WaitOnStopTimeout(ctx context.Context, timeout int64) error 
 	case <-watcher:
 		return nil
 	case <-ctx.Done():
+		// Do not keep a watcher for a request that is gone; the container
+		// may not stop for a long time and the kubelet keeps retrying.
+		c.removeStopWatcher(watcher)
+
 		// The stop may have completed at the same time; prefer reporting that.
 		select {
 		case <-watcher:
@@ -766,6 +780,15 @@ func (c *Container) WaitOnStopTimeout(ctx context.Context, timeout int64) error 
 
 		return ctx.Err()
 	}
+}
+
+func (c *Container) removeStopWatcher(watcher chan struct{}) {
+	c.stopLock.Lock()
+	defer c.stopLock.Unlock()
+
+	c.stopWatchers = slices.DeleteFunc(c.stopWatchers, func(w chan struct{}) bool {
+		return w == watcher
+	})
 }
 
 func (c *Container) SetAsDoneStopping() {
