@@ -721,13 +721,21 @@ func (c *Container) SetStopKillLoopBegun() {
 	c.stopKillLoopBegun = true
 }
 
-func (c *Container) WaitOnStopTimeout(ctx context.Context, timeout int64) {
+// WaitOnStopTimeout waits until the container's stop loop has finished, or
+// until ctx ends. It returns nil right away if no stop is in progress. The
+// timeout is offered to the stop loop, which adopts it if it is earlier than
+// the current one.
+//
+// If ctx ends first, ctx.Err() is returned and the container is still
+// stopping: the caller must not report it as stopped, and must not run any
+// post-stop cleanup for it.
+func (c *Container) WaitOnStopTimeout(ctx context.Context, timeout int64) error {
 	c.stopLock.Lock()
 
 	if !c.stopping || c.stopDone {
 		c.stopLock.Unlock()
 
-		return
+		return nil
 	}
 
 	// Don't use the stopTimeoutChan when the container is in kill loop
@@ -746,8 +754,17 @@ func (c *Container) WaitOnStopTimeout(ctx context.Context, timeout int64) {
 	c.stopLock.Unlock()
 
 	select {
-	case <-ctx.Done():
 	case <-watcher:
+		return nil
+	case <-ctx.Done():
+		// The stop may have completed at the same time; prefer reporting that.
+		select {
+		case <-watcher:
+			return nil
+		default:
+		}
+
+		return ctx.Err()
 	}
 }
 

@@ -1020,9 +1020,11 @@ func (r *runtimeOCI) StopContainer(
 		)
 	}
 
-	c.WaitOnStopTimeout(ctx, timeout)
-
-	return nil
+	// A cancelled or expired request does not mean the container stopped.
+	// Report that to the caller instead of returning success: post-stop
+	// cleanup on a still-running container blocks unrelated lifecycle
+	// operations behind shared locks while it waits for the stop loop.
+	return c.WaitOnStopTimeout(ctx, timeout)
 }
 
 func (r *runtimeOCI) StopLoopForContainer(
