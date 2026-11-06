@@ -1,0 +1,54 @@
+{
+  "default": [
+    {
+      "type": "reject"
+    }
+  ],
+  "transports": {
+    "atomic": {
+      "localhost:5000/other": [
+        {
+          "type": "insecureAcceptAnything"
+        },
+        {
+          "type": "sigstoreSigned",
+          "keyData": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFRzZjOWZqVDBFcUdmN28xc2kxTVN2QitTbkRoUQo5d0oydzFWb3hHVGQ3bDV1U1hWbWR1QWFaWmZSYkQ0Q2JhWmVzWWxDcDFTMWltQlU5MHFkeWdsZ3hRPT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==",
+          "signedIdentity": {
+            "type": "matchRepoDigestOrExact"
+          }
+        }
+      ],
+      "quay.io": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    },
+    "docker": {
+      "localhost:5000/other": [
+        {
+          "type": "insecureAcceptAnything"
+        },
+        {
+          "type": "sigstoreSigned",
+          "keyData": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFRzZjOWZqVDBFcUdmN28xc2kxTVN2QitTbkRoUQo5d0oydzFWb3hHVGQ3bDV1U1hWbWR1QWFaWmZSYkQ0Q2JhWmVzWWxDcDFTMWltQlU5MHFkeWdsZ3hRPT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==",
+          "signedIdentity": {
+            "type": "matchRepoDigestOrExact"
+          }
+        }
+      ],
+      "quay.io": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    },
+    "docker-daemon": {
+      "": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    }
+  }
+}

@@ -573,7 +573,7 @@ func (svc *imageService) IsRunningImageAllowed(
 	userSpecifiedImage RegistryImageReference,
 	imageID StorageImageID,
 ) error {
-	policy, err := signature.DefaultPolicy(systemContext)
+	policy, err := loadSignaturePolicy(systemContext)
 	if err != nil {
 		return fmt.Errorf("get default policy: %w", err)
 	}
@@ -993,7 +993,7 @@ func pullImageImplementation(
 		return RegistryImageReference{}, err
 	}
 
-	policy, err := signature.DefaultPolicy(options.SourceCtx)
+	policy, err := loadSignaturePolicy(options.SourceCtx)
 	if err != nil {
 		return RegistryImageReference{}, err
 	}

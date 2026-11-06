@@ -1,0 +1,5 @@
+docker:
+  localhost:5000/other:
+    use-sigstore-attachments: true
+  localhost:5000/partner:
+    use-sigstore-attachments: true

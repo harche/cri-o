@@ -470,7 +470,7 @@ func (i *runtimePulledImageService) IsRunningImageAllowed(
 	userSpecifiedImage RegistryImageReference,
 	imageID StorageImageID,
 ) error {
-	policy, err := signature.DefaultPolicy(systemContext)
+	policy, err := loadSignaturePolicy(systemContext)
 	if err != nil {
 		return fmt.Errorf("get default policy: %w", err)
 	}
