@@ -55,4 +55,9 @@ echo "T8 reject-by-default base + allowlist fragment (default not inherited)"
 echo "{\"default\":[{\"type\":\"reject\"}],\"transports\":{\"docker\":{\"$R/other\":$(sig keyA)}}}" | base
 echo "{\"transports\":{\"docker\":{\"$R/partner\":$(sig keyA)}}}" | frag 50-partner.json
 pull OK partner/app:signedA; pull FAIL partner/app:unsigned; pull FAIL other/app:unsigned; clean
+echo "T9 same-file exemption kept; other files still bind it"
+echo "{\"transports\":{\"docker\":{\"$R/partner\":$(sig keyA),\"$R/partner/app\":$ACCEPT}}}" | frag 50-cip.json
+pull OK partner/app:unsigned
+echo "{\"transports\":{\"docker\":{\"$R/other/app\":$ACCEPT}}}" | frag 60-exempt-other.json
+pull FAIL other/app:unsigned; clean
 echo "$BASE" | base
