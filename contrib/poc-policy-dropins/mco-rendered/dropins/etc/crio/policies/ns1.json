@@ -1,9 +1,4 @@
 {
-  "default": [
-    {
-      "type": "insecureAcceptAnything"
-    }
-  ],
   "transports": {
     "atomic": {
       "localhost:5000/other": [
@@ -24,13 +19,6 @@
           "signedIdentity": {
             "type": "matchRepoDigestOrExact"
           }
-        }
-      ]
-    },
-    "docker-daemon": {
-      "": [
-        {
-          "type": "insecureAcceptAnything"
         }
       ]
     }

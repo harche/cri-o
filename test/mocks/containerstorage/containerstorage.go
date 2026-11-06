@@ -387,6 +387,22 @@ func (mr *MockStoreMockRecorder) DeleteImage(id, commit any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteImage", reflect.TypeOf((*MockStore)(nil).DeleteImage), id, commit)
 }
 
+// DeleteImageWithSize mocks base method.
+func (m *MockStore) DeleteImageWithSize(id string, commit bool) ([]string, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteImageWithSize", id, commit)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// DeleteImageWithSize indicates an expected call of DeleteImageWithSize.
+func (mr *MockStoreMockRecorder) DeleteImageWithSize(id, commit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteImageWithSize", reflect.TypeOf((*MockStore)(nil).DeleteImageWithSize), id, commit)
+}
+
 // DeleteLayer mocks base method.
 func (m *MockStore) DeleteLayer(id string) error {
 	m.ctrl.T.Helper()

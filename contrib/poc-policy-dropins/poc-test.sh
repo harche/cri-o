@@ -60,4 +60,18 @@ echo "{\"transports\":{\"docker\":{\"$R/partner\":$(sig keyA),\"$R/partner/app\"
 pull OK partner/app:unsigned
 echo "{\"transports\":{\"docker\":{\"$R/other/app\":$ACCEPT}}}" | frag 60-exempt-other.json
 pull FAIL other/app:unsigned; clean
+echo "T10 namespace layer (ns1.json on top of policy.json + policy.json.d)"
+echo "{\"default\":$ACCEPT,\"transports\":{\"docker\":{\"$R/third\":[{\"type\":\"reject\"}]}}}" | base
+echo "{\"transports\":{\"docker\":{\"$R/partner/app\":$(sig keyA)}}}" | frag 50-cip.json
+echo "{\"transports\":{\"docker\":{\"$R/other\":$(sig keyA)}}}" | frag 60-handwritten.json
+sudo mkdir -p /etc/crio/policies
+echo "{\"transports\":{\"docker\":{\"$R/partner\":[{\"type\":\"reject\"}],\"$R/third/app\":$ACCEPT}}}" | sudo tee /etc/crio/policies/ns1.json >/dev/null
+pull OK   partner/app:signedA /tmp/pod-ns1.json   # cluster scope narrower than ns reject: cluster wins
+pull FAIL partner/app:signedB /tmp/pod-ns1.json
+pull FAIL other/app:unsigned  /tmp/pod-ns1.json   # hand-written fragment applies in ns1
+pull OK   other/app:signedA   /tmp/pod-ns1.json
+pull FAIL third/app:unsigned  /tmp/pod-ns1.json   # ns accept cannot bypass the blocked registry
+pull FAIL third/app:unsigned                      # same without a namespace
+pull FAIL other/app:unsigned
+clean
 echo "$BASE" | base

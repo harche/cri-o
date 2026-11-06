@@ -447,6 +447,7 @@ func New(
 
 	config.SystemContext.AuthFilePath = config.GlobalAuthFile
 	config.SystemContext.SignaturePolicyPath = config.SignaturePolicyPath
+	storage.SetSignaturePolicyPaths(config.SignaturePolicyPath, config.SignaturePolicyDir)
 
 	if err := os.MkdirAll(config.ContainerAttachSocketDir, 0o755); err != nil {
 		return nil, err
