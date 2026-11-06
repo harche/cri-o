@@ -26,6 +26,7 @@ import (
 	drivers "go.podman.io/storage/drivers"
 	"go.podman.io/storage/internal/dedup"
 	"go.podman.io/storage/internal/driver"
+	"go.podman.io/storage/internal/splitfdstreamserver"
 	"go.podman.io/storage/internal/tempdir"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/directory"
@@ -285,6 +286,18 @@ type Store interface {
 	// the commit argument is false, the image and layers are not removed,
 	// but the list of layers which would be removed is still returned.
 	DeleteImage(id string, commit bool) (layers []string, err error)
+
+	// DeleteImageWithSize is like DeleteImage, and additionally returns an
+	// estimate of the number of bytes the removal released, that is the
+	// removed layers and the image's big data.  It is smaller than the size of
+	// the image whenever the image shares layers with an image that is not
+	// removed, and it is -1 if an error occurred.
+	//
+	// The estimate is intended to reflect the space freed on disk, but it is
+	// not accurate: layers are measured as their uncompressed tar
+	// representation, and the directories removed along with them are not
+	// counted.
+	DeleteImageWithSize(id string, commit bool) (layers []string, size int64, err error)
 
 	// DeleteContainer removes the specified container and its layer.  If
 	// there is no matching container, or if the container exists but its
@@ -633,13 +646,39 @@ type AutoUserNsOptions = types.AutoUserNsOptions
 
 type IDMappingOptions = types.IDMappingOptions
 
+// LayerIDMappingOptions are the on-disk ID mappings for a layer.
+//
+// Unlike the caller-facing IDMappingOptions (which expresses what mapping
+// the caller wants), these record how files are actually stored.  The two
+// may differ: when the graph driver supports shifting, no chown
+// occurs so HostUIDMapping/HostGIDMapping are true and UIDMap/GIDMap
+// are empty, even though the caller requested a non-trivial mapping.
+// The caller's requested mapping is still honored at mount time via
+// the Container's UIDMap/GIDMap.
+type LayerIDMappingOptions struct {
+	// HostUIDMapping is true when files in this layer are stored with host
+	// UIDs.
+	HostUIDMapping bool
+	// HostGIDMapping is true when files in this layer are stored with host
+	// GIDs.  See HostUIDMapping for details.
+	HostGIDMapping bool
+	// UIDMap is the on-disk UID mapping: it records the chown that was
+	// applied to the layer's files at creation time.  Empty when
+	// HostUIDMapping is true.
+	UIDMap []idtools.IDMap
+	// GIDMap is the on-disk GID mapping: it records the chown that was
+	// applied to the layer's files at creation time.  Empty when
+	// HostGIDMapping is true.
+	GIDMap []idtools.IDMap
+}
+
 // LayerOptions is used for passing options to a Store's CreateLayer() and PutLayer() methods.
 type LayerOptions struct {
 	// IDMappingOptions specifies the type of ID mapping which should be
 	// used for this layer.  If nothing is specified, the layer will
 	// inherit settings from its parent layer or, if it has no parent
 	// layer, the Store object.
-	types.IDMappingOptions
+	IDMappingOptions LayerIDMappingOptions
 	// TemplateLayer is the ID of a layer whose contents will be used to
 	// initialize this layer.  If set, it should be a child of the layer
 	// which we want to use as the parent of the new layer.
@@ -708,10 +747,18 @@ type ImageBigDataOption struct {
 
 // ContainerOptions is used for passing options to a Store's CreateContainer() method.
 type ContainerOptions struct {
-	// IDMappingOptions specifies the type of ID mapping which should be
-	// used for this container's layer.  If nothing is specified, the
-	// container's layer will inherit settings from the image's top layer
-	// or, if it is not being created based on an image, the Store object.
+	// IDMappingOptions specifies the caller's desired ID mapping for the
+	// container's user namespace.
+	//
+	// These express what the caller wants, not what ends up on disk.
+	// The store records them in the Container and uses them at mount
+	// time.  How the layer's files are stored depends on whether the
+	// driver supports shifting: if it does, no chown occurs and the
+	// mapping is applied at mount time; otherwise files are chowned at
+	// layer creation time.
+	//
+	// If nothing is specified, mappings are inherited from the image's top
+	// layer or, if no image, from the Store's defaults.
 	types.IDMappingOptions
 	LabelOpts []string
 	// Flags is a set of named flags and their values to store with the container.
@@ -774,6 +821,14 @@ type store struct {
 	digestLockRoot  string
 	disableVolatile bool
 	transientStore  bool
+
+	// splitFDStreamLock protects splitFDStreamServer.  It is not graphLock:
+	// Shutdown stops the server while holding no lock, because what it
+	// waits for takes the store's locks.
+	splitFDStreamLock sync.Mutex
+	// splitFDStreamServer serves the sockets handed out by
+	// SplitFDStreamStore.Socket.  It is created on first use.
+	splitFDStreamServer *splitfdstreamserver.Server
 
 	// The following fields can only be accessed with graphLock held.
 	graphLockLastWrite lockfile.LastWrite
@@ -1518,14 +1573,14 @@ func populateLayerOptions(s *store, rlstore rwLayerStore, rlstores []roLayerStor
 		options.BigData = slices.Clone(lOptions.BigData)
 		options.Flags = copyMapPreferringNil(lOptions.Flags)
 	}
-	if options.HostUIDMapping {
-		options.UIDMap = nil
+	if options.IDMappingOptions.HostUIDMapping {
+		options.IDMappingOptions.UIDMap = nil
 	}
-	if options.HostGIDMapping {
-		options.GIDMap = nil
+	if options.IDMappingOptions.HostGIDMapping {
+		options.IDMappingOptions.GIDMap = nil
 	}
-	uidMap := options.UIDMap
-	gidMap := options.GIDMap
+	uidMap := options.IDMappingOptions.UIDMap
+	gidMap := options.IDMappingOptions.GIDMap
 	if parent != "" {
 		var err error
 		parentLayer, unlock, err = getParentLayer(rlstore, rlstores, parent)
@@ -1546,26 +1601,26 @@ func populateLayerOptions(s *store, rlstore rwLayerStore, rlstores []roLayerStor
 				return nil, nil, unlock, ErrParentIsContainer
 			}
 		}
-		if !options.HostUIDMapping && len(options.UIDMap) == 0 {
+		if !options.IDMappingOptions.HostUIDMapping && len(options.IDMappingOptions.UIDMap) == 0 {
 			uidMap = parentLayer.UIDMap
 		}
-		if !options.HostGIDMapping && len(options.GIDMap) == 0 {
+		if !options.IDMappingOptions.HostGIDMapping && len(options.IDMappingOptions.GIDMap) == 0 {
 			gidMap = parentLayer.GIDMap
 		}
 	} else {
-		if !options.HostUIDMapping && len(options.UIDMap) == 0 {
+		if !options.IDMappingOptions.HostUIDMapping && len(options.IDMappingOptions.UIDMap) == 0 {
 			uidMap = s.uidMap
 		}
-		if !options.HostGIDMapping && len(options.GIDMap) == 0 {
+		if !options.IDMappingOptions.HostGIDMapping && len(options.IDMappingOptions.GIDMap) == 0 {
 			gidMap = s.gidMap
 		}
 	}
 	if s.canUseShifting(uidMap, gidMap) {
-		options.IDMappingOptions = types.IDMappingOptions{HostUIDMapping: true, HostGIDMapping: true, UIDMap: nil, GIDMap: nil}
+		options.IDMappingOptions = LayerIDMappingOptions{HostUIDMapping: true, HostGIDMapping: true, UIDMap: nil, GIDMap: nil}
 	} else {
-		options.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: options.HostUIDMapping,
-			HostGIDMapping: options.HostGIDMapping,
+		options.IDMappingOptions = LayerIDMappingOptions{
+			HostUIDMapping: options.IDMappingOptions.HostUIDMapping,
+			HostGIDMapping: options.IDMappingOptions.HostGIDMapping,
 			UIDMap:         copySlicePreferringNil(uidMap),
 			GIDMap:         copySlicePreferringNil(gidMap),
 		}
@@ -1856,14 +1911,14 @@ func (s *store) imageTopLayerForMapping(image *Image, ristore roImageStore, rlst
 	// mappings, and register it as an alternate top layer in the image.
 	var layerOptions LayerOptions
 	if s.canUseShifting(options.UIDMap, options.GIDMap) {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
+		layerOptions.IDMappingOptions = LayerIDMappingOptions{
 			HostUIDMapping: true,
 			HostGIDMapping: true,
 			UIDMap:         nil,
 			GIDMap:         nil,
 		}
 	} else {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
+		layerOptions.IDMappingOptions = LayerIDMappingOptions{
 			HostUIDMapping: options.HostUIDMapping,
 			HostGIDMapping: options.HostGIDMapping,
 			UIDMap:         copySlicePreferringNil(options.UIDMap),
@@ -2008,20 +2063,12 @@ func (s *store) CreateContainer(id string, names []string, image, layer, metadat
 		// But in transient store mode, all container layers are volatile.
 		Volatile: options.Volatile || s.transientStore,
 	}
-	if s.canUseShifting(uidMap, gidMap) {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: true,
-			HostGIDMapping: true,
-			UIDMap:         nil,
-			GIDMap:         nil,
-		}
-	} else {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: idMappingsOptions.HostUIDMapping,
-			HostGIDMapping: idMappingsOptions.HostGIDMapping,
-			UIDMap:         copySlicePreferringNil(uidMap),
-			GIDMap:         copySlicePreferringNil(gidMap),
-		}
+	useHostMapping := idMappingsOptions.HostUIDMapping || s.canUseShifting(uidMap, gidMap)
+	layerOptions.IDMappingOptions = LayerIDMappingOptions{
+		HostUIDMapping: useHostMapping,
+		HostGIDMapping: useHostMapping,
+		UIDMap:         copySlicePreferringNil(uidMap),
+		GIDMap:         copySlicePreferringNil(gidMap),
 	}
 	if options.Flags == nil {
 		options.Flags = make(map[string]any)
@@ -2719,7 +2766,21 @@ func (s *store) DeleteLayer(id string) (retErr error) {
 }
 
 func (s *store) DeleteImage(id string, commit bool) (layers []string, retErr error) {
+	layers, _, err := s.deleteImage(id, commit, false)
+	return layers, err
+}
+
+func (s *store) DeleteImageWithSize(id string, commit bool) (layers []string, size int64, retErr error) {
+	return s.deleteImage(id, commit, true)
+}
+
+// deleteImage implements DeleteImage, and computes the size of the removed
+// layers if withSize is set.  Measuring the layers here, rather than in a
+// separate call, keeps the size consistent with the removal: it is determined
+// while holding the lock that removes them.
+func (s *store) deleteImage(id string, commit, withSize bool) (layers []string, size int64, retErr error) {
 	layersToRemove := []string{}
+	var removedSize int64
 	cleanupFunctions := []tempdir.CleanupTempDirFunc{}
 	defer func() {
 		if cleanupErr := tempdir.CleanupTemporaryDirectories(cleanupFunctions...); cleanupErr != nil {
@@ -2747,6 +2808,12 @@ func (s *store) DeleteImage(id string, commit bool) (layers []string, retErr err
 				return err
 			}
 			id = image.ID
+			if withSize {
+				// The big data is removed along with the image.
+				for _, bigDataSize := range image.BigDataSizes {
+					removedSize += bigDataSize
+				}
+			}
 			containers, err := s.containerStore.Containers()
 			if err != nil {
 				return err
@@ -2829,6 +2896,25 @@ func (s *store) DeleteImage(id string, commit bool) (layers []string, retErr err
 		if !imageFound {
 			return ErrNotAnImage
 		}
+		if withSize {
+			// The layers must be measured before they are removed.
+			for _, layer := range layersToRemove {
+				layerSize, err := rlstore.Size(layer)
+				if err != nil {
+					return err
+				}
+				if layerSize == -1 {
+					// The size is unknown, for instance for a layer that
+					// only recorded a TOC digest, so it must be computed,
+					// which can be slow as it might have to walk all files.
+					layerSize, err = rlstore.DiffSize("", layer)
+					if err != nil {
+						return err
+					}
+				}
+				removedSize += layerSize
+			}
+		}
 		if commit {
 			for _, layer := range layersToRemove {
 				cf, err := rlstore.deferredDelete(layer)
@@ -2840,9 +2926,9 @@ func (s *store) DeleteImage(id string, commit bool) (layers []string, retErr err
 		}
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, -1, err
 	}
-	return layersToRemove, nil
+	return layersToRemove, removedSize, nil
 }
 
 func (s *store) DeleteContainer(id string) (retErr error) {
@@ -3074,10 +3160,6 @@ func (s *store) Mount(id, mountLabel string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if options.UidMaps != nil || options.GidMaps != nil {
-		options.DisableShifting = !s.canUseShifting(options.UidMaps, options.GidMaps)
-	}
-
 	if err := rlstore.startWriting(); err != nil {
 		return "", err
 	}
@@ -3811,6 +3893,15 @@ func (s *store) FromContainerRunDirectory(id, file string) ([]byte, error) {
 
 func (s *store) Shutdown(force bool) ([]string, error) {
 	mounted := []string{}
+
+	// Stop serving layers before taking any lock: a request being served
+	// takes the store's locks, and stopping waits for it to be done.
+	s.splitFDStreamLock.Lock()
+	if s.splitFDStreamServer != nil {
+		s.splitFDStreamServer.Stop()
+		s.splitFDStreamServer = nil
+	}
+	s.splitFDStreamLock.Unlock()
 
 	if err := s.startUsingGraphDriver(); err != nil {
 		return mounted, err

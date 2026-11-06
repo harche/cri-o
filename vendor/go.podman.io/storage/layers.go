@@ -25,6 +25,7 @@ import (
 	"github.com/vbatts/tar-split/tar/asm"
 	"github.com/vbatts/tar-split/tar/storage"
 	drivers "go.podman.io/storage/drivers"
+	internalDriver "go.podman.io/storage/internal/driver"
 	"go.podman.io/storage/internal/tempdir"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/idtools"
@@ -167,8 +168,11 @@ type Layer struct {
 	// Flags is arbitrary data about the layer.
 	Flags map[string]any `json:"flags,omitempty"`
 
-	// UIDMap and GIDMap are used for setting up a layer's contents
-	// for use inside of a user namespace where UID mapping is being used.
+	// UIDMap and GIDMap are the on-disk ID mappings for this layer: the
+	// chown mapping that was applied to the layer's files at creation
+	// time.  When the driver supports shifting (idmapped mounts), no
+	// chown occurs and these fields are empty.  The caller's requested
+	// mapping is applied at mount time instead (see Container.UIDMap/GIDMap).
 	UIDMap []idtools.IDMap `json:"uidmap,omitempty"`
 	GIDMap []idtools.IDMap `json:"gidmap,omitempty"`
 
@@ -290,6 +294,25 @@ type roLayerStore interface {
 	// DiffSize produces an estimate of the length of the tarstream which would be
 	// produced by Diff.
 	DiffSize(from, to string) (int64, error)
+
+	// layerFilesWithoutMounting opens access to the files of a layer, so that
+	// their content can be referenced in a stream instead of copied into
+	// it.  The caller is responsible for closing the result.
+	//
+	// This is only supported by some drivers; see
+	// internal/driver.SplitDirFDStreamDriver.
+	layerFilesWithoutMounting(id string) (internalDriver.LayerFiles, error)
+
+	// tarSplitWithoutMounting opens the tar-split metadata of a layer and
+	// a getter for the content of its files, which together reproduce its
+	// original uncompressed blob.  It never mounts the layer, so a read
+	// lock is enough.  The caller is responsible for closing both.
+	//
+	// The caller streams the layer to a consumer that references file
+	// content where it is stored, with reflinks where it can, so it has no
+	// use for a mount anyway: content read through one could only be
+	// copied.
+	tarSplitWithoutMounting(id string) (io.ReadCloser, drivers.FileGetCloser, error)
 
 	// Size produces a cached value for the uncompressed size of the layer,
 	// if one is known, or -1 if it is not known.  If the layer can not be
@@ -847,8 +870,8 @@ func (r *layerStore) GarbageCollect() error {
 		name := entry.Name()
 		var id string
 		var isDataDir bool
-		if strings.HasSuffix(name, tarSplitSuffix) {
-			id = strings.TrimSuffix(name, tarSplitSuffix)
+		if idPart, ok := strings.CutSuffix(name, tarSplitSuffix); ok {
+			id = idPart
 		} else if stringid.ValidateID(name) == nil {
 			id = name
 			isDataDir = true
@@ -1600,8 +1623,8 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 		UIDs:               templateUIDs,
 		GIDs:               templateGIDs,
 		Flags:              newMapFrom(moreOptions.Flags),
-		UIDMap:             copySlicePreferringNil(moreOptions.UIDMap),
-		GIDMap:             copySlicePreferringNil(moreOptions.GIDMap),
+		UIDMap:             copySlicePreferringNil(moreOptions.IDMappingOptions.UIDMap),
+		GIDMap:             copySlicePreferringNil(moreOptions.IDMappingOptions.GIDMap),
 		BigDataNames:       []string{},
 		location:           r.pickStoreLocation(moreOptions.Volatile, writeable),
 	}
@@ -1645,7 +1668,10 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 		}
 	}
 
-	idMappings := idtools.NewIDMappingsFromMaps(moreOptions.UIDMap, moreOptions.GIDMap)
+	idMappings := idtools.NewIDMappingsFromMaps(moreOptions.IDMappingOptions.UIDMap, moreOptions.IDMappingOptions.GIDMap)
+	if moreOptions.IDMappingOptions.HostUIDMapping && moreOptions.IDMappingOptions.HostGIDMapping {
+		idMappings = &idtools.IDMappings{}
+	}
 	opts := drivers.CreateOpts{
 		MountLabel: mountLabel,
 		StorageOpt: options,
@@ -2339,6 +2365,25 @@ func (r *layerStore) newFileGetter(id string) (drivers.FileGetCloser, error) {
 	}, nil
 }
 
+// fileGetterWithoutMounting is newFileGetter restricted to what the driver
+// can serve directly, so that it never falls back to mounting the layer.
+//
+// Requires startReading or startWriting.
+func (r *layerStore) fileGetterWithoutMounting(id string) (drivers.FileGetCloser, error) {
+	getter, ok := r.driver.(drivers.DiffGetterDriver)
+	if !ok {
+		return nil, fmt.Errorf("driver %s cannot read a layer without mounting it: %w", r.driver.String(), drivers.ErrNotSupported)
+	}
+	fgc, err := getter.DiffGetter(id)
+	if err != nil {
+		return nil, err
+	}
+	if fgc == nil {
+		return nil, fmt.Errorf("driver %s has no file getter for layer %s: %w", r.driver.String(), id, drivers.ErrNotSupported)
+	}
+	return fgc, nil
+}
+
 // writeCompressedData copies data from source to compressor, which is on top of pwriter.
 func writeCompressedData(compressor io.WriteCloser, source io.ReadCloser) error {
 	defer compressor.Close()
@@ -2509,6 +2554,63 @@ func (r *layerStore) Diff(from, to string, options *DiffOptions) (io.ReadCloser,
 	return maybeCompressReadCloser(rc)
 }
 
+// tarSplitWithoutMounting implements roLayerStore.
+//
+// Diff needs the primary layer store locked for writing because some of the
+// paths it can take mount the layer; see drivers/overlay.Driver.getMergedDir.
+// This takes none of them: it only uses the tar-split metadata, and the file
+// getter comes from the driver rather than from a mount.  Those conditions
+// are checked rather than assumed, so a read lock is enough.
+//
+// Requires startReading or startWriting.
+func (r *layerStore) tarSplitWithoutMounting(id string) (io.ReadCloser, drivers.FileGetCloser, error) {
+	layer, ok := r.lookup(id)
+	if !ok {
+		return nil, nil, ErrLayerUnknown
+	}
+	tsfile, err := os.Open(r.tspath(layer.ID))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Regenerating the archive would need a mount, and would not
+			// reproduce the original blob byte for byte anyway.
+			return nil, nil, fmt.Errorf("layer %s has no tar-split metadata: %w", layer.ID, drivers.ErrNotSupported)
+		}
+		return nil, nil, err
+	}
+	decompressor, err := pgzip.NewReader(tsfile)
+	if err != nil {
+		if closeErr := tsfile.Close(); closeErr != nil {
+			logrus.Debugf("closing tar-split metadata of layer %s: %v", layer.ID, closeErr)
+		}
+		return nil, nil, err
+	}
+	tarSplit := ioutils.NewReadCloserWrapper(decompressor, func() error {
+		return errors.Join(decompressor.Close(), tsfile.Close())
+	})
+	fgetter, err := r.fileGetterWithoutMounting(layer.ID)
+	if err != nil {
+		return nil, nil, errors.Join(err, tarSplit.Close())
+	}
+	return tarSplit, fgetter, nil
+}
+
+// layerFilesWithoutMounting implements roLayerStore.
+//
+// Requires startReading or startWriting.
+func (r *layerStore) layerFilesWithoutMounting(id string) (internalDriver.LayerFiles, error) {
+	layer, ok := r.lookup(id)
+	if !ok {
+		return nil, ErrLayerUnknown
+	}
+	driver, ok := r.driver.(internalDriver.SplitDirFDStreamDriver)
+	if !ok {
+		return nil, fmt.Errorf("driver %s does not support splitdirfdstream operations: %w", r.driver.String(), drivers.ErrNotSupported)
+	}
+	return driver.LayerFiles(layer.ID, func(key string) (io.ReadCloser, error) {
+		return r.BigData(layer.ID, key)
+	})
+}
+
 // Requires startReading or startWriting.
 func (r *layerStore) DiffSize(from, to string) (size int64, err error) {
 	var fromLayer, toLayer *Layer
@@ -2601,7 +2703,7 @@ func (r *layerStore) stageWithUnlockedStore(sl *maybeStagedLayerExtraction, pare
 	result, err := applyDiff(layerOptions, sl.diff, f, func(payload io.Reader) (int64, error) {
 		cleanup, stagedLayer, size, err := sl.staging.StartStagingDiffToApply(parent, drivers.ApplyDiffOpts{
 			Diff:     payload,
-			Mappings: idtools.NewIDMappingsFromMaps(layerOptions.UIDMap, layerOptions.GIDMap),
+			Mappings: idtools.NewIDMappingsFromMaps(layerOptions.IDMappingOptions.UIDMap, layerOptions.IDMappingOptions.GIDMap),
 			// MountLabel is not supported for the unlocked extraction, see the comment in (*store).PutLayer()
 			MountLabel: "",
 		})
@@ -2701,7 +2803,7 @@ func applyDiff(layerOptions *LayerOptions, diff io.Reader, tarSplitFile *os.File
 		}
 		defer idLogger.Close() // This must happen before uidLog and gidLog is consumed.
 		uncompressedCounter = ioutils.NewWriteCounter(idLogger)
-		uncompressedWriter := (io.Writer)(uncompressedCounter)
+		uncompressedWriter := io.Writer(uncompressedCounter)
 		if uncompressedDigester != nil {
 			uncompressedWriter = io.MultiWriter(uncompressedWriter, uncompressedDigester.Hash())
 		}
